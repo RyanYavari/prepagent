@@ -16,31 +16,40 @@ The output is a 4-section briefing: company intelligence, interviewer profile, y
 ## Tech Stack
 
 **Frontend:** Next.js, TypeScript, Tailwind CSS, Supabase Auth
+
 **Backend:** FastAPI, Python 3.12, LangGraph, LangChain, Claude Sonnet
+
 **Database:** Supabase PostgreSQL
+
 **Vector Store:** Pinecone
+
 **Reranking:** Cohere Rerank
+
 **Observability:** LangSmith
+
 **Evals:** RAGAS
+
 **Integrations:** Gmail MCP, Google Calendar MCP, Google Drive MCP
+
 **Infrastructure:** Docker, AWS EC2, GitHub Actions CI/CD
 
 ## Architecture
 
-
+```
 Next.js Frontend (Vercel)
-↓
+    ↓
 FastAPI Backend (AWS EC2)
-↓
+    ↓
 LangGraph Supervisor Graph
-├── Company Intelligence Agent (Tavily)
-├── Interviewer Research Agent (Tavily)
-├── RAG Retrieval Agent (Pinecone + Cohere Rerank)
-└── Synthesis Agent (Claude Sonnet)
-↓
+    ├── Company Intelligence Agent (Tavily)
+    ├── Interviewer Research Agent (Tavily)
+    ├── RAG Retrieval Agent (Pinecone + Cohere Rerank)
+    └── Synthesis Agent (Claude Sonnet)
+    ↓
 Gmail MCP + Google Calendar MCP + Google Drive MCP
 Supabase PostgreSQL
 LangSmith Tracing
+```
 
 ## Getting Started
 
@@ -76,6 +85,7 @@ npm run dev
 
 **backend/.env**
 
+```bash
 SUPABASE_URL=
 SUPABASE_SERVICE_KEY=
 ANTHROPIC_API_KEY=
@@ -89,13 +99,15 @@ TAVILY_API_KEY=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 FRONTEND_URL=http://localhost:3000
-
+```
 
 **frontend/.env.local**
 
+```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
 ## Agent Architecture
 
