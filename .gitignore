@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# Node
+node_modules/
+.next/
+.env.local
+
+# Mac
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
