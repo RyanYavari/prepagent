@@ -125,14 +125,6 @@ PrepAgent uses RAGAS to evaluate briefing quality across 3 metrics:
 
 Baseline scores are documented and tracked across prompt iterations.
 
-## Project Status
-
-- [x] Day 1: Project setup, FastAPI backend, Next.js frontend, Supabase schema
-- [ ] Day 2: Google OAuth flow
-- [ ] Day 3: Research pipeline (Tavily, LangGraph, Pinecone, Cohere)
-- [ ] Day 4: Synthesis agent, RAGAS evals, briefing viewer UI
-- [ ] Day 5: Docker, cloud deployment, GitHub Actions CI/CD, launch
-
 ## License
 
 MIT
