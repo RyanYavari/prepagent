@@ -1,3 +1,5 @@
+Superseded — see ARCHITECTURE_DECISIONS.md for the current design and reasoning.
+
 Let me lay out the complete architecture before we go into the week by week spec.
 
 Full System Architecture

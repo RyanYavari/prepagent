@@ -1,5 +1,7 @@
 # PrepAgent
 
+Status: architecture designed, implementation in progress.
+
 AI-powered interview research. Enter a company and interviewer — get a personalized briefing in 90 seconds.
 
 ## What it does
@@ -21,9 +23,7 @@ The output is a 4-section briefing: company intelligence, interviewer profile, y
 
 **Database:** Supabase PostgreSQL
 
-**Vector Store:** Pinecone
-
-**Reranking:** Cohere Rerank
+**Vector Store:** pgvector (Supabase)
 
 **Observability:** LangSmith
 
@@ -40,10 +40,12 @@ Next.js Frontend (Vercel)
     ↓
 FastAPI Backend (AWS EC2)
     ↓
-LangGraph Supervisor Graph
-    ├── Company Intelligence Agent (Tavily)
-    ├── Interviewer Research Agent (Tavily)
-    ├── RAG Retrieval Agent (Pinecone + Cohere Rerank)
+LangGraph DAG
+    ├── Company Intelligence Agent (Tavily) ──┐ parallel
+    ├── Interviewer Research Agent (Tavily) ──┘
+    ↓
+    ├── RAG Retrieval Agent (pgvector)
+    ↓
     └── Synthesis Agent (Claude Sonnet)
     ↓
 Gmail MCP + Google Calendar MCP + Google Drive MCP
@@ -57,7 +59,7 @@ LangSmith Tracing
 
 - Python 3.12+
 - Node.js 18+
-- Accounts: Anthropic, OpenAI, Cohere, Pinecone, Supabase, LangSmith, Tavily
+- Accounts: Anthropic, OpenAI, Supabase, LangSmith, Tavily
 
 ### Backend Setup
 
@@ -90,9 +92,6 @@ SUPABASE_URL=
 SUPABASE_SERVICE_KEY=
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
-COHERE_API_KEY=
-PINECONE_API_KEY=
-PINECONE_INDEX=prepagent
 LANGSMITH_API_KEY=
 LANGSMITH_PROJECT=prepagent
 TAVILY_API_KEY=
@@ -111,7 +110,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ## Agent Architecture
 
-PrepAgent uses a LangGraph supervisor graph with stateful routing across 4 specialized agents. The supervisor decides when each agent has gathered sufficient context before handing off to synthesis.
+PrepAgent uses a LangGraph DAG with fixed edges. Company research and interviewer research run in parallel (they're independent), then RAG retrieval pulls relevant resume and briefing context, then synthesis generates the final briefing. Retry logic for insufficient web results lives inside each agent's tool-calling loop rather than in a separate routing layer.
 
 Each agent step is traced in LangSmith. Every tool call is logged with token usage and latency.
 
@@ -121,7 +120,7 @@ PrepAgent uses RAGAS to evaluate briefing quality across 3 metrics:
 
 - **Answer relevance** — does the briefing address this specific role and company
 - **Faithfulness** — are talking points grounded in what the research actually found
-- **Context precision** — is the retrieved context from Pinecone useful for this briefing
+- **Context precision** — is the retrieved context from pgvector useful for this briefing
 
 Baseline scores are documented and tracked across prompt iterations.
 
