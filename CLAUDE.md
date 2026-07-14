@@ -8,8 +8,7 @@ An AI-powered interview research tool. Users sign in with Google, upload their r
 - Frontend: Next.js (app router), TypeScript, Tailwind, Supabase SSR
 - Backend: FastAPI, Python 3.12, LangGraph, LangChain, Claude Sonnet
 - Database: Supabase PostgreSQL
-- Vector store: Pinecone
-- Reranking: Cohere
+- Vector store: pgvector (Supabase)
 - Observability: LangSmith
 - Evals: RAGAS
 - Auth: Google OAuth via FastAPI backend
