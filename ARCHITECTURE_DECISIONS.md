@@ -1,6 +1,6 @@
 # Architecture Decisions
 
-Engineering design decisions for PrepAgent, with tradeoffs and justifications. Written to be defensible in a technical interview, not to rationalize the README.
+Design decisions superseding the original tech-stack sketch in the README, with tradeoffs considered for each.
 
 ---
 
@@ -24,7 +24,7 @@ The strongest argument is the retry case. Web research is inherently unreliable 
 - **The workflow is deterministic.** You always need company research, you always attempt interviewer research (or skip it -- a simple `if` statement), and you always synthesize. There's no branching decision that requires LLM judgment.
 - **Retry logic belongs inside the agent, not the supervisor.** If the company research agent gets bad Tavily results, the agent itself should reformulate and retry within its tool-calling loop. That's a local decision, not a routing decision.
 - **The supervisor call adds latency and cost.** An extra LLM invocation between every step, to make a decision that is almost always "proceed to next step," is overhead with no payoff.
-- **A supervisor obscures the actual architecture.** When you say "supervisor graph," an interviewer expects dynamic routing, conditional branching, or agent selection from a pool. If the answer to "what does it route on?" is "nothing, really," the term is misleading.
+- **A supervisor obscures the actual architecture.** The term "supervisor graph" implies dynamic routing, conditional branching, or agent selection from a pool. If the answer to "what does it route on?" is "nothing, really," the term is misleading.
 
 ### Decision: Fixed DAG, not a supervisor
 
@@ -32,9 +32,9 @@ Use LangGraph with explicit edges: Company Research and Interviewer Research run
 
 Each research agent internally uses a tool-calling loop with retry logic (reformulate query if Tavily returns <2 results). That handles the "insufficient context" problem without a supervisor.
 
-### Interview answer
+### Summary
 
-> "I initially spec'd a supervisor graph, but when I mapped the actual routing decisions, the workflow is deterministic -- you always research the company, always research the interviewer, and always synthesize. The only dynamic behavior is retry logic when web search returns poor results, and that belongs inside each agent's tool-calling loop, not at the supervisor level. So I use a LangGraph DAG with fixed edges: company and interviewer research run in parallel, then RAG retrieval, then synthesis. I still get LangGraph's state management and LangSmith tracing, but the architecture honestly reflects the workflow instead of adding a supervisor call that would just say 'proceed' every time."
+The original spec called for a supervisor graph, but mapping the actual routing decisions reveals a deterministic workflow: company research, interviewer research, and synthesis always run. The only dynamic behavior is retry logic when web search returns poor results, and that belongs inside each agent's tool-calling loop, not at the supervisor level. A LangGraph DAG with fixed edges -- company and interviewer research in parallel, then RAG retrieval, then synthesis -- preserves LangGraph's state management and LangSmith tracing while honestly reflecting the workflow. A supervisor call that just says "proceed" every time adds latency without adding value.
 
 ---
 
@@ -46,7 +46,7 @@ The README specs Pinecone. I have production experience with Qdrant (SJC project
 
 ### Option A: Pinecone
 
-**Pros**: Fully managed, serverless tier is cheap, good metadata filtering, demonstrates breadth on a resume.
+**Pros**: Fully managed, serverless tier is cheap, good metadata filtering.
 
 **Cons**: Third vector store I'd need to learn (marginal, but real), adds another API key and service dependency, solves scaling problems that don't exist here. Pinecone's value proposition is high-QPS production search over millions of vectors. PrepAgent's corpus per user is a single resume (~10-20 chunks) and a growing set of briefings (maybe 50-100 over months). That's trivially small.
 
@@ -66,9 +66,9 @@ The README specs Pinecone. I have production experience with Qdrant (SJC project
 
 The corpus is too small to justify a dedicated vector service. A user's resume produces ~15 chunks. After months of use, they might have 50-100 briefing chunks. pgvector handles this without breaking a sweat, and it's already deployed because Supabase is the primary database.
 
-### Interview answer
+### Summary
 
-> "The README originally spec'd Pinecone, but when I sized the actual corpus, it didn't justify a separate vector service. Each user has one resume -- maybe 15 chunks -- and a growing set of briefings that might reach 100 chunks after months of use. Pinecone solves scaling problems I don't have. Since Supabase is already my primary database, pgvector lets me store embeddings alongside user data with zero additional infrastructure. I've shipped pgvector in production before with Quizzler, so I know its limitations -- but those limitations kick in at millions of vectors, not hundreds."
+The original spec called for Pinecone, but sizing the actual corpus makes a dedicated vector service hard to justify. Each user has one resume (roughly 15 chunks) and a growing set of briefings that might reach 100 chunks after months of use. Pinecone solves scaling problems that don't exist here. Since Supabase is already the primary database, pgvector stores embeddings alongside user data with zero additional infrastructure. pgvector's known limitations -- slower similarity search at scale -- kick in at millions of vectors, not hundreds.
 
 ---
 
@@ -110,9 +110,9 @@ The simple version: retrieve all resume chunks (there are only ~15) and only bri
 | Resume | By section header | 10-20 | user_id, doc_type, section |
 | Briefing | By output section | 4 per briefing | user_id, doc_type, company, role, date |
 
-### Interview answer
+### Summary
 
-> "I embed two document types: resume sections and past briefing sections. Resumes are chunked by section header -- each job, education entry, skills block -- because those are natural semantic units. Briefings are chunked by their four output sections. Cross-contamination is prevented at the query level: I always retrieve all resume chunks for the user, but I filter briefing chunks to only the target company. Since I'm using pgvector in Supabase, this is just a SQL WHERE clause alongside the vector similarity search -- no complex metadata filtering API needed. I dropped Cohere Rerank from the design because the corpus per user is under 100 vectors; reranking a retrieval set that's already most of the corpus doesn't add value."
+Two document types are embedded: resume sections and past briefing sections. Resumes are chunked by section header (each job, education entry, skills block) because those are natural semantic units. Briefings are chunked by their four output sections. Cross-contamination is prevented at the query level: all resume chunks for the user are always retrieved, but briefing chunks are filtered to only the target company. Since pgvector lives in Supabase, this filtering is a SQL WHERE clause alongside the vector similarity search -- no dedicated metadata filtering API needed. Cohere Rerank was dropped because the corpus per user is under 100 vectors; reranking a retrieval set that already constitutes most of the corpus doesn't add value.
 
 ---
 
@@ -168,9 +168,9 @@ Build a test set of 30 emails:
 
 Measure precision and recall on the classification task. Target: >90% recall (don't miss real invites), >80% precision (some false positives are acceptable given the confirmation step).
 
-### Interview answer
+### Summary
 
-> "Email detection uses two stages: a lightweight pre-filter checks for calendar attachments, scheduling keywords, and known recruiter platform domains -- this avoids an LLM call on every email. Emails that pass go to Claude for structured extraction of company, interviewer, and date. The critical design choice is that we never auto-run a briefing from detection. The user always sees 'Interview detected at [Company] with [Interviewer] -- prepare briefing?' and confirms. This makes both false positives and extraction errors cheap. I tested this against a set of 30 emails across three categories and targeted >90% recall because missing a real invite is more expensive than showing a dismissible false positive."
+Email detection uses two stages: a lightweight pre-filter checks for calendar attachments, scheduling keywords, and known recruiter platform domains, avoiding an LLM call on every incoming email. Emails that pass the pre-filter go to Claude for structured extraction of company, interviewer, and date. The critical design choice is that a detected email never auto-triggers a briefing run. The user always sees the extracted fields and confirms before the pipeline executes. This makes both false positives and extraction errors cheap to recover from. The pre-filter biases toward recall (>90% target) because missing a real invite is more costly than surfacing a dismissible false positive.
 
 ---
 
@@ -235,9 +235,9 @@ Without running this, reasonable targets based on similar RAG eval benchmarks:
 
 These are starting baselines, not production targets. The value is in tracking them across prompt iterations, not in the absolute numbers.
 
-### Interview answer
+### Summary
 
-> "I use RAGAS with three metrics that each catch a different failure mode: answer relevance catches generic briefings, faithfulness catches hallucinated talking points, and context precision catches bad retrieval. My ground truth set is 5 examples -- I picked companies I've actually interviewed at so I could verify output quality. Each example has a manually written golden briefing as the reference. The eval script is about 30 lines of Python. My baseline scores are [X, Y, Z] -- the main insight was that faithfulness was the weakest metric because the synthesis agent would sometimes invent connections between my resume and the company that the research didn't actually support, which led me to add source attribution to the synthesis prompt."
+RAGAS with three metrics covers three distinct failure modes: answer relevance catches generic briefings, faithfulness catches hallucinated talking points, and context precision catches bad retrieval. The ground truth set is 5 examples, each with a manually written golden briefing as the reference. The eval script is roughly 30 lines of Python. The expected weak spot is faithfulness, since the synthesis agent is most likely to invent connections between the user's resume and the target company that the research doesn't actually support. If that pattern emerges, the mitigation is adding source attribution requirements to the synthesis prompt.
 
 ---
 
@@ -283,9 +283,9 @@ Before running company research, do a quick check: "Given the company name '[X]'
 - **Automated fact-checking against a knowledge base**: Massively complex, marginal benefit over source attribution.
 - **Confidence scores on each section**: Users don't calibrate on confidence scores. Source attribution is more actionable.
 
-### Interview answer
+### Summary
 
-> "The most likely failure is hallucinated talking points -- the synthesis agent invents connections between the user's resume and the target company that the research doesn't actually support. The cheapest guardrail is source attribution in the synthesis prompt: every claim must cite either a URL from the research or a specific resume section. This doesn't prevent hallucination, but it makes it immediately detectable by the user. An unsourced claim is a red flag. I also add low-result warnings -- if Tavily returns fewer than 3 results for the company or interviewer, the section explicitly says 'limited public data available.' These two guardrails are essentially free to implement -- one is a prompt change, the other is a conditional check -- and they address the two highest-risk failure modes."
+The most likely failure mode is hallucinated talking points: the synthesis agent invents connections between the user's resume and the target company that the research doesn't support. The cheapest guardrail is source attribution in the synthesis prompt -- every claim must cite either a URL from the research or a specific resume section. This doesn't prevent hallucination, but it makes hallucination immediately detectable by the user; an unsourced claim is a visible red flag. The second guardrail is low-result warnings: if Tavily returns fewer than 3 results for the company or interviewer, the section explicitly states that limited public data is available. Both guardrails are essentially free to implement -- one is a prompt change, the other is a conditional check -- and they address the two highest-risk failure modes.
 
 ---
 
@@ -299,4 +299,4 @@ Before running company research, do a quick check: "Given the company name '[X]'
 | RAGAS evals (no baseline) | RAGAS with 5-example ground truth set | Minimum viable eval with actual numbers to report |
 | Supervisor "decides when sufficient context" | Per-agent retry loop with result-count threshold | "Sufficient context" is a local decision (did Tavily return results?), not a routing decision |
 
-These aren't compromises -- they're better-justified decisions. A supervisor graph with no routing logic is harder to defend than a fixed DAG that honestly represents the workflow.
+These aren't compromises -- they're better-justified decisions. A supervisor graph with no routing logic is harder to justify than a fixed DAG that honestly represents the workflow.
