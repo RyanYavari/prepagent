@@ -53,10 +53,16 @@ export default function Dashboard() {
 
         <div className="border rounded-lg p-8 text-center">
           <h2 className="text-xl font-semibold mb-2">Briefing History</h2>
-          <p className="text-gray-500">
+          <p className="text-gray-500 mb-4">
             No briefings yet. Start your first interview prep to see results
             here.
           </p>
+          <button
+            onClick={() => router.push("/prep/new")}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            New Briefing
+          </button>
         </div>
       </div>
     </main>
