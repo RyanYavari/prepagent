@@ -16,8 +16,10 @@ app.add_middleware(
 )
 
 from routers.auth import router as auth_router
+from routers.research import router as research_router
 
 app.include_router(auth_router)
+app.include_router(research_router)
 
 
 @app.get("/health")
