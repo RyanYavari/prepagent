@@ -78,7 +78,7 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - No Co-Authored-By lines in commit messages
 
 ## What Claude gets wrong
-- (Add patterns here as they emerge. Each entry = one mistake the agent repeated.)
+- Running `ruff format <dir>` then `git add -u` sweeps unrelated files into a commit. Format only the files you changed, and stage them by name.
 
 ## Testing
 - pytest for backend, run with `pytest -x -q` from backend/
