@@ -1,7 +1,5 @@
 # PrepAgent
 
-Status: architecture designed, implementation in progress.
-
 AI-powered interview research. Enter a company and interviewer — get a personalized briefing in 90 seconds.
 
 ## What it does
@@ -15,6 +13,25 @@ PrepAgent runs a 4-agent research pipeline when you have an interview:
 
 The output is a 4-section briefing: company intelligence, interviewer profile, your talking points, and questions to ask.
 
+## Project Status
+
+| Area | Status |
+|---|---|
+| Google OAuth, JWT sessions, user upsert (Supabase) | Done |
+| Briefing CRUD endpoints (`POST/GET /briefings`) | Done |
+| Frontend: sign-in, OAuth callback, dashboard, new-briefing form | Done |
+| Resume ingestion: section-aware chunking, OpenAI embeddings, pgvector storage, auto re-embed (23 tests) | Done |
+| RAG retrieval node (user-scoped SQL filter, resume + same-company briefings) | Done |
+| CI (ruff, pytest, mypy, frontend lint/build) | Done |
+| Company Intelligence agent (Tavily, retry on <2 results, low-result warning) | Next |
+| Interviewer Research agent | Planned |
+| Synthesis agent with source attribution | Planned |
+| LangGraph StateGraph wiring + background execution | Planned |
+| Briefing viewer page | Planned |
+| Briefing chunk writer (post-synthesis embedding) | Planned |
+| RAGAS eval harness (5-example golden set) | Planned |
+| Gmail / Calendar / Drive integrations | Planned |
+
 ## Tech Stack
 
 **Frontend:** Next.js, TypeScript, Tailwind CSS, Supabase Auth
@@ -25,15 +42,15 @@ The output is a 4-section briefing: company intelligence, interviewer profile, y
 
 **Vector Store:** pgvector (Supabase)
 
-**Observability:** LangSmith
+**Observability:** LangSmith (planned)
 
-**Evals:** RAGAS
+**Evals:** RAGAS (planned)
 
-**Integrations:** Gmail MCP, Google Calendar MCP, Google Drive MCP
+**Integrations:** Google OAuth (built); Gmail, Google Calendar, and Google Drive MCP (planned)
 
-**Infrastructure:** Docker, AWS EC2, GitHub Actions CI/CD
+**Infrastructure:** Docker Compose and GitHub Actions CI (built); AWS EC2 / Vercel deployment (planned)
 
-## Architecture
+## Target Architecture
 
 ```
 Next.js Frontend (Vercel)
@@ -108,21 +125,36 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-## Agent Architecture
+## Agent Architecture (design)
 
-PrepAgent uses a LangGraph DAG with fixed edges. Company research and interviewer research run in parallel (they're independent), then RAG retrieval pulls relevant resume and briefing context, then synthesis generates the final briefing. Retry logic for insufficient web results lives inside each agent's tool-calling loop rather than in a separate routing layer.
+PrepAgent will use a LangGraph DAG with fixed edges. Company research and interviewer research run in parallel (they're independent), then RAG retrieval pulls relevant resume and briefing context, then synthesis generates the final briefing. Retry logic for insufficient web results lives inside each agent's tool-calling loop rather than in a separate routing layer.
 
-Each agent step is traced in LangSmith. Every tool call is logged with token usage and latency.
+Planned: each agent step traced in LangSmith, with tool calls logged with token usage and latency.
 
-## Evaluation
+## Key Design Decisions
 
-PrepAgent uses RAGAS to evaluate briefing quality across 3 metrics:
+Full reasoning is in [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) and [docs/decisions.md](docs/decisions.md).
+
+- **Fixed DAG, not a supervisor.** The workflow is deterministic, so a routing LLM call adds latency and cost for no benefit. Retries live inside each agent.
+- **pgvector over Pinecone/Qdrant.** The corpus is about 15 resume chunks plus a small set of briefing chunks per user, and Supabase is already in the stack.
+- **No reranker.** Retrieval is a SQL filter scoped by `user_id` and company, because the candidate set is already most of the corpus.
+- **Cross-contamination prevention.** Briefing chunks are filtered to the target company so other companies' details don't leak into talking points.
+- **Guardrails for hallucination.** Source attribution in synthesis and low-result warnings (planned).
+- **Identity from the JWT only**, never the request body.
+
+## Engineering Workflow
+
+Spec-first (Given/When/Then acceptance criteria in `specs/`), tests written before implementation, and conventional commits.
+
+## Evaluation (planned)
+
+PrepAgent will use RAGAS to evaluate briefing quality across 3 metrics:
 
 - **Answer relevance** — does the briefing address this specific role and company
 - **Faithfulness** — are talking points grounded in what the research actually found
 - **Context precision** — is the retrieved context from pgvector useful for this briefing
 
-Baseline scores are documented and tracked across prompt iterations.
+The plan is a 5-example golden set, with baseline scores tracked across prompt iterations. No scores have been recorded yet.
 
 ## License
 
