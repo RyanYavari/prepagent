@@ -18,11 +18,6 @@ _COLUMNS = "doc_type, section, content, company, role, created_at"
 _TABLE = "resume_embeddings"
 
 
-def _escape_like(value: str) -> str:
-    """Escape LIKE wildcards so the company name is matched literally."""
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
 def _to_chunks(rows: list[dict]) -> list[RetrievedChunk]:
     return [
         RetrievedChunk(**{k: row.get(k) for k in RetrievedChunk.model_fields})
@@ -61,13 +56,21 @@ def retrieve_user_context(user_id: str | UUID, company: str) -> RetrievalResult:
         .select(_COLUMNS)
         .eq("user_id", str(user_id))
         .eq("doc_type", "briefing")
-        .ilike("company", _escape_like(company.strip()))
         .order("created_at", desc=True)
         .execute()
         .data
     )
 
+    # Company is matched in Python, not via ilike: PostgREST treats `*` as a wildcard
+    # alias and offers no reliable escaping. The per-user corpus is tiny (ADR section 3).
+    target = company.strip().casefold()
+    same_company = [
+        r
+        for r in briefing_rows or []
+        if (r.get("company") or "").strip().casefold() == target
+    ]
+
     return RetrievalResult(
         resume_chunks=_to_chunks(resume_rows or []),
-        briefing_chunks=_to_chunks(briefing_rows or []),
+        briefing_chunks=_to_chunks(same_company),
     )

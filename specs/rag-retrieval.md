@@ -20,7 +20,7 @@ A `rag_retrieval` node (fixed-DAG step after company/interviewer research, befor
 - `models/retrieval.py`: `RetrievedChunk` (`doc_type`, `section`, `content`, `company`, `role`, `created_at`) and `RetrievalResult` (`resume_chunks`, `briefing_chunks`).
 - `services/retrieval.py`: `retrieve_user_context(user_id, company) -> RetrievalResult`. Two Supabase queries, both always filtered on `user_id`:
   1. `doc_type = 'resume'`
-  2. `doc_type = 'briefing'` and `company` equal to target, case-insensitive (`ilike` with wildcard characters escaped), newest first.
+  2. `doc_type = 'briefing'`, newest first; company is then matched in Python (case-insensitive, trimmed, literal) because PostgREST `ilike` treats `*` as a wildcard with no reliable escape.
   The `embedding` column is never selected.
 - `agents/rag.py`: `rag_retrieval_node(state)`. Reads `user_id` and `company` from state (identity comes from the JWT upstream, never from the request body). Returns `{"retrieved_context": RetrievalResult-as-dict, "warnings": [...]}`.
 
@@ -39,7 +39,7 @@ A `rag_retrieval` node (fixed-DAG step after company/interviewer research, befor
 ### Scenario 3: Company match is case-insensitive and literal
 - **Given** stored briefing chunks with company "Stripe"
 - **When** retrieval runs for "stripe" or " STRIPE "
-- **Then** the chunks match. A company containing `%` or `_` (e.g. "100%_Co") is matched literally and does not act as a wildcard.
+- **Then** the chunks match. A company containing `%`, `_` or `*` (e.g. "100%_Co", "A*B") is matched literally and does not act as a wildcard.
 
 ### Scenario 4: No resume on file
 - **Given** a user with no resume chunks

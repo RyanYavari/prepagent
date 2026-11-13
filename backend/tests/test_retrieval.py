@@ -16,7 +16,6 @@ class FakeQuery:
         self._rows = rows
         self.selected = None
         self.eq_filters: dict[str, str] = {}
-        self.ilike_filters: dict[str, str] = {}
         self.order_args = None
 
     def select(self, cols):
@@ -25,10 +24,6 @@ class FakeQuery:
 
     def eq(self, col, val):
         self.eq_filters[col] = val
-        return self
-
-    def ilike(self, col, pattern):
-        self.ilike_filters[col] = pattern
         return self
 
     def order(self, col, desc=False):
@@ -41,12 +36,6 @@ class FakeQuery:
             for r in self._rows
             if all(r.get(k) == v for k, v in self.eq_filters.items())
         ]
-        for col, pattern in self.ilike_filters.items():
-            # Emulate literal, case-insensitive match (pattern has escapes removed)
-            literal = (
-                pattern.replace("\\%", "%").replace("\\_", "_").replace("\\\\", "\\")
-            )
-            rows = [r for r in rows if (r.get(col) or "").lower() == literal.lower()]
 
         class Result:
             data = rows
@@ -128,11 +117,15 @@ class TestRetrieveUserContext:
         rows = [
             _row(uid, "briefing", "other", "company_overview", "100XCo"),
             _row(uid, "briefing", "literal", "company_overview", "100%_Co"),
+            _row(uid, "briefing", "star", "company_overview", "A*B"),
+            _row(uid, "briefing", "star-other", "company_overview", "AxxB"),
         ]
         result, fake = _run(rows, uid, "100%_Co")
+        star, _ = _run(rows, uid, "A*B")
+        assert [c.content for c in star.briefing_chunks] == ["star"]
 
-        pattern = fake.queries[1].ilike_filters["company"]
-        assert pattern == "100\\%\\_Co"
+        assert [c.content for c in result.briefing_chunks] == ["literal"]
+        assert fake.queries[1].order_args is not None
         assert [c.content for c in result.briefing_chunks] == ["literal"]
 
     def test_briefings_ordered_newest_first(self):

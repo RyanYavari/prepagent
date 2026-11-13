@@ -66,9 +66,7 @@ def chunk_resume(resume_text: str | None) -> list[ResumeChunk]:
 
     for i, match in enumerate(matches):
         # Extract section name (from one of the capture groups)
-        section_name = next(
-            g.lower() for g in match.groups() if g is not None
-        )
+        section_name = next(g.lower() for g in match.groups() if g is not None)
 
         # Content starts after the header
         start_pos = match.end()
