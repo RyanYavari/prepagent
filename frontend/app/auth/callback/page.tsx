@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-export default function AuthCallback() {
+function AuthCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -59,12 +60,12 @@ export default function AuthCallback() {
             Authentication Error
           </h1>
           <p className="text-gray-600 mb-8">{error}</p>
-          <a
+          <Link
             href="/"
             className="bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800"
           >
             Try Again
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -79,5 +80,19 @@ export default function AuthCallback() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function AuthCallback() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center">
+          <p className="text-gray-600">Loading...</p>
+        </main>
+      }
+    >
+      <AuthCallbackContent />
+    </Suspense>
   );
 }

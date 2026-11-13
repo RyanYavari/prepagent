@@ -19,21 +19,28 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
   - Error handling: 503 for OpenAI failures, 500 for config errors
   - Full test coverage: 23 passing tests (chunking, embedding, storage, endpoint integration)
 
-### ⚠️ Partial (Week 1, Day 5)
-- **Dashboard**: Displays user email but does NOT fetch/display briefing history (GET /briefings exists but not called)
-- **New Briefing form**: Button exists but points to /prep/new (NOT IMPLEMENTED)
+### ✅ Complete (Week 1, Day 5)
+- **Dashboard**: Fetches and displays briefing history (GET /briefings)
+- **New Briefing form**: /prep/new implemented
+
+### ✅ Complete (Week 2, RAG retrieval) — specs/rag-retrieval.md
+- `services/retrieval.py`: all resume chunks + same-company briefing chunks, SQL filter scoped by user_id (no rerank, no similarity query, per ADR §3)
+- `agents/rag.py`: `rag_retrieval_node(state)` (LangGraph node contract; not yet wired into a graph)
+- Migration `003_retrieval_metadata.sql` (company/role columns) — **must be applied to Supabase**
+
+### ⚠️ Partial
 - **Pipeline trigger**: POST /briefings creates DB record + embeds resume, but no LangGraph pipeline execution yet
 
 ### ❌ Not Started (Week 2+)
-- **All agent nodes**: backend/agents/ files are empty (company.py, interviewer.py, rag.py, synthesis.py, supervisor.py)
-- **RAG retrieval**: Embeddings stored but no retrieval endpoint/service yet
+- **Agent nodes**: company.py, interviewer.py, synthesis.py are empty (supervisor.py stays empty: fixed DAG, no supervisor)
+- **Briefing chunk writer**: post-synthesis embedding of briefing sections (retrieval already reads them)
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
-- **LangGraph pipeline**: No multi-agent orchestration, no background task execution
+- **LangGraph pipeline**: No StateGraph orchestration, no background task execution
 - **Briefing viewer**: No page to display generated briefing content
 - **RAGAS evaluation**: Not implemented
 
 ### Next Task
-**Week 1, Day 5 (Dashboard Polish)** — Wire up dashboard to fetch/display briefing history, implement /prep/new form
+**Week 2: Company Intelligence agent** (Tavily + retry loop when <2 results, low-result warning when <3 per ADR §1/§6) — spec it first with /spec
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet
@@ -68,9 +75,10 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - All agent nodes in backend/agents/, services in backend/services/
 - Environment variables in .env, never hardcoded
 - Conventional commits: feat:, fix:, refactor:, test:, docs:, chore:
+- No Co-Authored-By lines in commit messages
 
 ## What Claude gets wrong
-- (Add patterns here as they emerge. Each entry = one mistake the agent repeated.)
+- Running `ruff format <dir>` then `git add -u` sweeps unrelated files into a commit. Format only the files you changed, and stage them by name.
 
 ## Testing
 - pytest for backend, run with `pytest -x -q` from backend/

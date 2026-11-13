@@ -46,9 +46,9 @@ async def create_briefing(
     if body.resume_text:
         try:
             # Save raw resume text to user record
-            supabase.table("users").update(
-                {"resume_text": body.resume_text}
-            ).eq("id", user.user_id).execute()
+            supabase.table("users").update({"resume_text": body.resume_text}).eq(
+                "id", user.user_id
+            ).execute()
 
             # Chunk, embed, and store in pgvector
             process_resume_embedding(user.user_id, body.resume_text)

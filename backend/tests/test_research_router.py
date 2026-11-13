@@ -52,9 +52,9 @@ class TestCreateBriefingWithResume:
         # Mock user update
         mock_user_update = MagicMock()
         mock_user_update.data = [{"id": mock_user_id}]
-        mock_supabase.table("users").update().eq().execute.return_value = (
-            mock_user_update
-        )
+        mock_supabase.table(
+            "users"
+        ).update().eq().execute.return_value = mock_user_update
 
         # Mock briefing insert
         mock_briefing_insert = MagicMock()
@@ -70,9 +70,9 @@ class TestCreateBriefingWithResume:
                 "created_at": "2025-01-01T00:00:00Z",
             }
         ]
-        mock_supabase.table("briefings").insert().execute.return_value = (
-            mock_briefing_insert
-        )
+        mock_supabase.table(
+            "briefings"
+        ).insert().execute.return_value = mock_briefing_insert
 
         # Mock embedding process
         mock_process_resume.return_value = 3  # 3 chunks created
@@ -117,9 +117,9 @@ class TestCreateBriefingWithResume:
                 "created_at": "2025-01-01T00:00:00Z",
             }
         ]
-        mock_supabase.table("briefings").insert().execute.return_value = (
-            mock_briefing_insert
-        )
+        mock_supabase.table(
+            "briefings"
+        ).insert().execute.return_value = mock_briefing_insert
 
         response = client_with_auth.post(
             "/briefings",
@@ -144,9 +144,9 @@ class TestCreateBriefingWithResume:
         # Mock user update success
         mock_user_update = MagicMock()
         mock_user_update.data = [{"id": mock_user_id}]
-        mock_supabase.table("users").update().eq().execute.return_value = (
-            mock_user_update
-        )
+        mock_supabase.table(
+            "users"
+        ).update().eq().execute.return_value = mock_user_update
 
         # Mock embedding failure
         mock_process_resume.side_effect = OpenAIError("Rate limit exceeded")
@@ -175,9 +175,9 @@ class TestCreateBriefingWithResume:
         # Mock user update success
         mock_user_update = MagicMock()
         mock_user_update.data = [{"id": mock_user_id}]
-        mock_supabase.table("users").update().eq().execute.return_value = (
-            mock_user_update
-        )
+        mock_supabase.table(
+            "users"
+        ).update().eq().execute.return_value = mock_user_update
 
         # Mock embedding failure due to missing API key
         mock_process_resume.side_effect = ValueError(
@@ -208,9 +208,9 @@ class TestCreateBriefingWithResume:
         # Mock user update
         mock_user_update = MagicMock()
         mock_user_update.data = [{"id": mock_user_id}]
-        mock_supabase.table("users").update().eq().execute.return_value = (
-            mock_user_update
-        )
+        mock_supabase.table(
+            "users"
+        ).update().eq().execute.return_value = mock_user_update
 
         # Mock briefing insert
         mock_briefing_insert = MagicMock()
@@ -226,9 +226,9 @@ class TestCreateBriefingWithResume:
                 "created_at": "2025-01-01T00:00:00Z",
             }
         ]
-        mock_supabase.table("briefings").insert().execute.return_value = (
-            mock_briefing_insert
-        )
+        mock_supabase.table(
+            "briefings"
+        ).insert().execute.return_value = mock_briefing_insert
 
         # Mock embedding process (internally it deletes then re-embeds)
         mock_process_resume.return_value = 2
