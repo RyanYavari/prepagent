@@ -7,6 +7,7 @@ Handles chunking resume text by section headers and storing embeddings in pgvect
 import os
 import re
 from dataclasses import dataclass
+from typing import Any, cast
 from uuid import UUID
 
 from openai import OpenAI
@@ -129,8 +130,8 @@ def delete_user_resume_embeddings(user_id: str | UUID) -> None:
         Exception: If Supabase delete fails
     """
     supabase = create_client(
-        os.getenv("SUPABASE_URL"),
-        os.getenv("SUPABASE_SERVICE_KEY"),
+        os.getenv("SUPABASE_URL", ""),
+        os.getenv("SUPABASE_SERVICE_KEY", ""),
     )
 
     supabase.table("resume_embeddings").delete().eq("user_id", str(user_id)).eq(
@@ -162,11 +163,11 @@ def store_resume_embeddings(
         return  # Nothing to store
 
     supabase = create_client(
-        os.getenv("SUPABASE_URL"),
-        os.getenv("SUPABASE_SERVICE_KEY"),
+        os.getenv("SUPABASE_URL", ""),
+        os.getenv("SUPABASE_SERVICE_KEY", ""),
     )
 
-    rows = [
+    rows: list[dict[str, Any]] = [
         {
             "user_id": str(user_id),
             "doc_type": "resume",
@@ -177,7 +178,7 @@ def store_resume_embeddings(
         for chunk, embedding in zip(chunks, embeddings)
     ]
 
-    supabase.table("resume_embeddings").insert(rows).execute()
+    supabase.table("resume_embeddings").insert(cast(Any, rows)).execute()
 
 
 def process_resume_embedding(user_id: str | UUID, resume_text: str) -> int:

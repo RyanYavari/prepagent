@@ -7,6 +7,7 @@ briefing chunks for the target company. Every query is scoped to user_id.
 """
 
 import os
+from typing import Any, cast
 from uuid import UUID
 
 from supabase import create_client
@@ -18,9 +19,11 @@ _COLUMNS = "doc_type, section, content, company, role, created_at"
 _TABLE = "resume_embeddings"
 
 
-def _to_chunks(rows: list[dict]) -> list[RetrievedChunk]:
+def _to_chunks(rows: list[dict[str, Any]]) -> list[RetrievedChunk]:
     return [
-        RetrievedChunk(**{k: row.get(k) for k in RetrievedChunk.model_fields})
+        RetrievedChunk.model_validate(
+            {k: row.get(k) for k in RetrievedChunk.model_fields}
+        )
         for row in rows
     ]
 
@@ -38,27 +41,29 @@ def retrieve_user_context(user_id: str | UUID, company: str) -> RetrievalResult:
             mistaken for "user has no resume".
     """
     supabase = create_client(
-        os.getenv("SUPABASE_URL"),
-        os.getenv("SUPABASE_SERVICE_KEY"),
+        os.getenv("SUPABASE_URL", ""),
+        os.getenv("SUPABASE_SERVICE_KEY", ""),
     )
 
-    resume_rows = (
+    resume_rows = cast(
+        list[dict[str, Any]],
         supabase.table(_TABLE)
         .select(_COLUMNS)
         .eq("user_id", str(user_id))
         .eq("doc_type", "resume")
         .execute()
-        .data
+        .data,
     )
 
-    briefing_rows = (
+    briefing_rows = cast(
+        list[dict[str, Any]],
         supabase.table(_TABLE)
         .select(_COLUMNS)
         .eq("user_id", str(user_id))
         .eq("doc_type", "briefing")
         .order("created_at", desc=True)
         .execute()
-        .data
+        .data,
     )
 
     # Company is matched in Python, not via ilike: PostgREST treats `*` as a wildcard
