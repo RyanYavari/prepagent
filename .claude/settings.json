@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash(ruff *)",
+      "Bash(pytest *)",
+      "Bash(npm run *)",
+      "Bash(npx *)",
+      "Bash(pip install *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git status)",
+      "Bash(uvicorn *)",
+      "Bash(curl *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(DROP TABLE *)",
+      "Bash(DROP DATABASE *)",
+      "Write(.env)",
+      "Write(.env.local)",
+      "Edit(.env)",
+      "Edit(.env.local)"
+    ]
+  }
+}

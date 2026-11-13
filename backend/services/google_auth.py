@@ -1,9 +1,8 @@
 import os
 import secrets
-from typing import Optional
 
-from google_auth_oauthlib.flow import Flow
 import httpx
+from google_auth_oauthlib.flow import Flow
 
 SCOPES = [
     "openid",
@@ -80,7 +79,7 @@ async def exchange_code_for_tokens(code: str) -> dict:
     }
 
 
-async def refresh_access_token(refresh_token_value: str) -> Optional[str]:
+async def refresh_access_token(refresh_token_value: str) -> str | None:
     """Use a refresh token to get a new access token. Returns None on failure."""
     async with httpx.AsyncClient() as client:
         response = await client.post(

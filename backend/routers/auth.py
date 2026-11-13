@@ -1,5 +1,5 @@
-import os
 import datetime
+import os
 
 import jwt
 from fastapi import APIRouter, HTTPException, Query
@@ -22,8 +22,8 @@ def _create_session_token(user_id: str, email: str) -> str:
     payload = {
         "sub": user_id,
         "email": email,
-        "iat": datetime.datetime.now(datetime.timezone.utc),
-        "exp": datetime.datetime.now(datetime.timezone.utc)
+        "iat": datetime.datetime.now(datetime.UTC),
+        "exp": datetime.datetime.now(datetime.UTC)
         + datetime.timedelta(days=7),
     }
     return jwt.encode(
