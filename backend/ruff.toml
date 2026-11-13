@@ -1,0 +1,8 @@
+[lint]
+# FastAPI dependency injection uses Depends() in argument defaults by design.
+flake8-bugbear.extend-immutable-calls = ["fastapi.Depends"]
+
+[lint.per-file-ignores]
+# Router handlers are the HTTP error boundary: they deliberately catch any failure
+# and convert it to an HTTPException.
+"routers/*.py" = ["BLE001"]
