@@ -23,8 +23,7 @@ def _create_session_token(user_id: str, email: str) -> str:
         "sub": user_id,
         "email": email,
         "iat": datetime.datetime.now(datetime.UTC),
-        "exp": datetime.datetime.now(datetime.UTC)
-        + datetime.timedelta(days=7),
+        "exp": datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=7),
     }
     return jwt.encode(
         payload,
@@ -40,9 +39,7 @@ async def auth_google():
         url, state = build_authorization_url()
         return {"url": url, "state": state}
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to build auth URL: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to build auth URL: {e}")
 
 
 @router.get("/callback", response_model=TokenResponse)
@@ -54,9 +51,7 @@ async def auth_callback(
     try:
         token_data = await exchange_code_for_tokens(code)
     except Exception as e:
-        raise HTTPException(
-            status_code=400, detail=f"Token exchange failed: {e}"
-        )
+        raise HTTPException(status_code=400, detail=f"Token exchange failed: {e}")
 
     email = token_data["email"]
     access_token = token_data["access_token"]
@@ -66,10 +61,7 @@ async def auth_callback(
     try:
         supabase = _get_supabase()
         existing = (
-            supabase.table("users")
-            .select("id, email")
-            .eq("email", email)
-            .execute()
+            supabase.table("users").select("id, email").eq("email", email).execute()
         )
 
         if existing.data:
