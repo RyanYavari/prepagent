@@ -13,24 +13,6 @@ PrepAgent runs a 4-agent research pipeline when you have an interview:
 
 The output is a 4-section briefing: company intelligence, interviewer profile, your talking points, and questions to ask.
 
-## Project Status
-
-| Area | Status |
-|---|---|
-| Google OAuth, JWT sessions, user upsert (Supabase) | Done |
-| Briefing CRUD endpoints (`POST/GET /briefings`) | Done |
-| Frontend: sign-in, OAuth callback, dashboard, new-briefing form | Done |
-| Resume ingestion: section-aware chunking, OpenAI embeddings, pgvector storage, auto re-embed (23 tests) | Done |
-| RAG retrieval node (user-scoped SQL filter, resume + same-company briefings) | Done |
-| CI (ruff, pytest, mypy, frontend lint/build) | Done |
-| Company Intelligence agent (Tavily, retry on <2 results, low-result warning) | Next |
-| Interviewer Research agent | Planned |
-| Synthesis agent with source attribution | Planned |
-| LangGraph StateGraph wiring + background execution | Planned |
-| Briefing viewer page | Planned |
-| Briefing chunk writer (post-synthesis embedding) | Planned |
-| RAGAS eval harness (5-example golden set) | Planned |
-| Gmail / Calendar / Drive integrations | Planned |
 
 ## Tech Stack
 
