@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -18,12 +17,12 @@ class BriefingStatus(str, Enum):
 
 class BriefingCreate(BaseModel):
     company: str = Field(..., min_length=1, max_length=200)
-    interviewer: Optional[str] = Field(None, max_length=200)
-    role: Optional[str] = Field(None, max_length=200)
-    interview_date: Optional[str] = Field(
+    interviewer: str | None = Field(None, max_length=200)
+    role: str | None = Field(None, max_length=200)
+    interview_date: str | None = Field(
         None, description="Date of the interview, e.g. 2025-06-15"
     )
-    resume_text: Optional[str] = Field(
+    resume_text: str | None = Field(
         None,
         max_length=50_000,
         description="Raw resume text to use for this briefing.",
@@ -76,19 +75,19 @@ class BriefingResponse(BaseModel):
     id: str
     user_id: str
     company: str
-    interviewer: Optional[str] = None
-    role: Optional[str] = None
-    interview_date: Optional[str] = None
+    interviewer: str | None = None
+    role: str | None = None
+    interview_date: str | None = None
     status: BriefingStatus
-    content: Optional[BriefingSections] = None
+    content: BriefingSections | None = None
     created_at: str
 
 
 class BriefingListItem(BaseModel):
     id: str
     company: str
-    interviewer: Optional[str] = None
-    role: Optional[str] = None
+    interviewer: str | None = None
+    role: str | None = None
     status: BriefingStatus
     created_at: str
 
