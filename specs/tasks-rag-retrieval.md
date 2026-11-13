@@ -16,9 +16,9 @@ Spec: `specs/rag-retrieval.md`
 - [ ] Run /review
 
 ### Slice 3: RAG node
-- [ ] Write failing tests in `backend/tests/test_rag_node.py` (scenarios 4, 5, 6)
-- [ ] Implement `rag_retrieval_node` in `backend/agents/rag.py`
-- [ ] Update CLAUDE.md Current State / Next Task
+- [x] Write failing tests in `backend/tests/test_rag_node.py` (scenarios 4, 5, 6)
+- [x] Implement `rag_retrieval_node` in `backend/agents/rag.py`
+- [x] Update CLAUDE.md Current State / Next Task
 - [ ] Run /review
 
 ## Done checklist
