@@ -34,6 +34,7 @@ psql "$SUPABASE_DATABASE_URL" -f supabase/migrations/002_resume_embeddings.sql
 ## Migration Files
 
 - `002_resume_embeddings.sql` - Creates `resume_embeddings` table with pgvector support
+- `003_retrieval_metadata.sql` - Adds `company`, `role` columns and a case-insensitive company index for briefing-chunk retrieval
 
 ## Verifying Migration
 
