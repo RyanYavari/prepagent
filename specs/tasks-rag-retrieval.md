@@ -5,14 +5,14 @@ Spec: `specs/rag-retrieval.md`
 ## Slice plan
 
 ### Slice 1: Schema + models
-- [ ] Add `supabase/migrations/003_retrieval_metadata.sql` (company, role columns, index)
-- [ ] Document migration in `supabase/README.md`
-- [ ] Add `backend/models/retrieval.py` (`RetrievedChunk`, `RetrievalResult`)
+- [x] Add `supabase/migrations/003_retrieval_metadata.sql` (company, role columns, index)
+- [x] Document migration in `supabase/README.md`
+- [x] Add `backend/models/retrieval.py` (`RetrievedChunk`, `RetrievalResult`)
 - [ ] Run /review
 
 ### Slice 2: Retrieval service
-- [ ] Write failing tests in `backend/tests/test_retrieval.py` (scenarios 1, 2, 3, 7, 8)
-- [ ] Implement `backend/services/retrieval.py` (`retrieve_user_context`)
+- [x] Write failing tests in `backend/tests/test_retrieval.py` (scenarios 1, 2, 3, 7, 8)
+- [x] Implement `backend/services/retrieval.py` (`retrieve_user_context`)
 - [ ] Run /review
 
 ### Slice 3: RAG node
