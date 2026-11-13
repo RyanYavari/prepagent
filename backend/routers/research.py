@@ -1,6 +1,7 @@
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from openai import OpenAIError
 from supabase import create_client
 
 from dependencies.auth import CurrentUser, get_current_user
@@ -12,6 +13,7 @@ from models.briefing import (
     BriefingSections,
     BriefingStatus,
 )
+from services.embeddings import process_resume_embedding
 
 router = APIRouter(prefix="/briefings", tags=["briefings"])
 
@@ -40,12 +42,29 @@ async def create_briefing(
         "status": BriefingStatus.pending.value,
     }
 
-    # If resume_text is provided, store it on the user record for RAG later
+    # If resume_text is provided, store it and create embeddings for RAG
     if body.resume_text:
         try:
+            # Save raw resume text to user record
             supabase.table("users").update(
                 {"resume_text": body.resume_text}
             ).eq("id", user.user_id).execute()
+
+            # Chunk, embed, and store in pgvector
+            process_resume_embedding(user.user_id, body.resume_text)
+
+        except OpenAIError as e:
+            # OpenAI API failures should be temporary
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Embedding service temporarily unavailable: {e}",
+            )
+        except ValueError as e:
+            # Missing API key or invalid input
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Configuration error: {e}",
+            )
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
