@@ -209,7 +209,7 @@ def _run_with_llm(state, search_results, llm_profile=None, llm_error=None):
         structured.invoke.return_value = llm_profile
     with (
         patch("agents.interviewer.search_web", return_value=search_results),
-        patch("agents.interviewer.ChatAnthropic", return_value=llm) as ctor,
+        patch("agents.llm.ChatAnthropic", return_value=llm) as ctor,
     ):
         out = interviewer_research_node(state)
     return out, llm, structured, ctor
@@ -220,7 +220,9 @@ def test_summary_sources_are_result_urls():  # scenario 1
     profile = InterviewerProfile(summary="Staff engineer", sources=[])
     out, llm, structured, _ = _run_with_llm(_state(), results, profile)
 
-    llm.with_structured_output.assert_called_once_with(InterviewerProfile)
+    llm.with_structured_output.assert_called_once_with(
+        InterviewerProfile, method="json_schema"
+    )
     structured.invoke.assert_called_once()
     assert out["interviewer_research"]["summary"] == "Staff engineer"
     assert out["interviewer_research"]["sources"] == [r.url for r in results]
@@ -250,12 +252,6 @@ def test_fabricated_sources_are_dropped():  # scenario 11
 def test_llm_returning_dict_is_validated():
     out, _, _, _ = _run_with_llm(_state(), _hits("a", "b", "c"), {"summary": "d"})
     assert out["interviewer_research"]["summary"] == "d"
-
-
-def test_model_overridable_via_env(monkeypatch):
-    monkeypatch.setenv("INTERVIEWER_AGENT_MODEL", "custom-model")
-    _, _, _, ctor = _run_with_llm(_state(), _hits("a", "b", "c"), InterviewerProfile())
-    assert ctor.call_args.kwargs["model"] == "custom-model"
 
 
 def test_llm_failure_propagates():  # scenario 13

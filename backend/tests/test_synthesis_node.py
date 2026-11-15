@@ -157,7 +157,7 @@ def _run_with_llm(state, llm_output=None, side_effect=None):
         structured.invoke.return_value = llm_output or _output()
     llm = MagicMock()
     llm.with_structured_output.return_value = structured
-    with patch("agents.synthesis.ChatAnthropic", return_value=llm) as ctor:
+    with patch("agents.llm.ChatAnthropic", return_value=llm) as ctor:
         out = synthesis_node(state)
     return out, llm, structured, ctor
 
@@ -168,17 +168,12 @@ def _prompt_text(structured):
 
 
 def test_llm_wired_with_structured_output():
-    out, llm, structured, ctor = _run_with_llm(_state())
-    llm.with_structured_output.assert_called_once_with(SynthesisOutput)
+    out, llm, structured, _ = _run_with_llm(_state())
+    llm.with_structured_output.assert_called_once_with(
+        SynthesisOutput, method="json_schema"
+    )
     structured.invoke.assert_called_once()
-    assert ctor.call_args.kwargs["temperature"] == 0
     assert out["briefing_content"]["talking_points"]["talking_points"]
-
-
-def test_model_overridable_via_env(monkeypatch):
-    monkeypatch.setenv("SYNTHESIS_AGENT_MODEL", "claude-custom")
-    _, _, _, ctor = _run_with_llm(_state())
-    assert ctor.call_args.kwargs["model"] == "claude-custom"
 
 
 def test_system_prompt_requires_source_attribution():  # scenario 2

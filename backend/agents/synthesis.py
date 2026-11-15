@@ -8,13 +8,12 @@ talking points and interviewer enrichment are generated, with source attribution
 enforced in code (section 6, guardrails 1 and 3).
 """
 
-import os
 import re
 from typing import Any
 
-from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel, Field
 
+from agents.llm import structured_llm
 from models.briefing import (
     BriefingSections,
     CompanyOverview,
@@ -24,7 +23,6 @@ from models.briefing import (
 )
 from models.retrieval import RetrievalResult, RetrievedChunk
 
-DEFAULT_MODEL = "claude-sonnet-5-5"
 NO_CONTEXT_WARNING = (
     "Not enough research context to generate role insights or talking points."
 )
@@ -124,11 +122,7 @@ def _generate(
         if include_interviewer
         else INTERVIEWER_RULE_OFF
     )
-    llm = ChatAnthropic(  # type: ignore[call-arg]
-        model=os.getenv("SYNTHESIS_AGENT_MODEL", DEFAULT_MODEL),
-        temperature=0,
-    )
-    structured = llm.with_structured_output(SynthesisOutput)
+    structured = structured_llm(SynthesisOutput)
     result = structured.invoke([("system", system), ("human", "\n\n".join(parts))])
     return (
         result

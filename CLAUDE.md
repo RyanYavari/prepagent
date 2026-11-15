@@ -31,15 +31,15 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 ### ✅ Complete (Week 2, Company Intelligence) — specs/company-intelligence.md
 - `services/web_search.py`: Tavily wrapper (`search_web`), errors propagate
 - `agents/company.py`: `company_research_node(state)` — query ladder (max 3 attempts), retry when <2 results, low-result warning when <3, Claude structured-output summary into `CompanyOverview`, `sources` set from result URLs in code (not wired into a graph yet)
-- Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model overridable via `COMPANY_AGENT_MODEL`
+- Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model set by shared `AGENT_MODEL` (agents/llm.py)
 
 ### ✅ Complete (Week 2, Interviewer Research) — specs/interviewer-research.md
 - `agents/interviewer.py`: `interviewer_research_node(state)` — skips (empty profile, no warning) when no interviewer; query ladder (max 3), drops results that don't mention the interviewer's full name, retry when <2 relevant, low-result warning when <3, wrong-person warning when no result mentions the company, Claude structured-output summary into `InterviewerProfile` (summary/background only), `sources` set from result URLs in code (not wired into a graph yet)
-- Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model overridable via `INTERVIEWER_AGENT_MODEL`
+- Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model set by shared `AGENT_MODEL` (agents/llm.py)
 
 ### ✅ Complete (Week 2, Synthesis) — specs/synthesis-agent.md
 - `agents/synthesis.py`: `synthesis_node(state)` — passes company overview and interviewer summary/background through, generates role insights, talking points and interviewer enrichment in one Claude structured-output call (source-attribution prompt per ADR §6 guardrail 1), then validates citations in code (guardrail 3): items need `[Source: <url>]` (url from company/interviewer sources) or `[Resume: <Section>]` (section from retrieved resume chunks), otherwise dropped with a count warning; empty talking points warn; no usable context skips the LLM; `role_insights.sources` set in code (not wired into a graph yet)
-- Needs `ANTHROPIC_API_KEY`; model overridable via `SYNTHESIS_AGENT_MODEL`
+- Needs `ANTHROPIC_API_KEY`; model set by shared `AGENT_MODEL` (agents/llm.py)
 
 ### ✅ Complete (Week 2, LangGraph pipeline) — specs/langgraph-pipeline.md
 - `agents/pipeline.py`: `build_graph()` fixed-DAG `StateGraph` (company + interviewer in parallel → RAG → synthesis, no supervisor); `run_pipeline(...)` sets status `running`, invokes the graph, persists `content` and sets `complete`, or sets `failed` (logged, never raises)
@@ -102,6 +102,7 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - On macOS, `sed -i` needs an explicit backup-suffix argument (`sed -i ''`) and fails on multi-line edits. Use the Edit tool or a Python script instead.
 - Task files (`specs/tasks-*.md`) get their "Run /review" boxes ticked only if a review actually ran for that slice. Don't leave them unchecked after the final review passes.
 - In zsh, a variable holding several file names (`F="a b"; ruff check $F`) is not split into separate arguments. Pass the files directly.
+- Mocked LLM tests don't catch API-level incompatibilities (forced `tool_choice` and `temperature` both 400'd on the real model while every mocked test passed). Before calling an agent done, run one real smoke call per agent: `RUN_LIVE_LLM_TESTS=1 pytest tests/test_llm.py -k live` plus the node itself with real keys.
 
 ## Known local issues
 - mypy 2.4.1 crashes with "INTERNAL ERROR" locally, even on untouched files, so type-checking can't be verified here; rely on CI. Pin not bumped yet.
@@ -112,6 +113,7 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - Write failing tests first, then implement
 
 ## Non-obvious gotchas
+- All agents get their LLM from `agents/llm.py` (`structured_llm`): `AGENT_MODEL` env var (default `claude-sonnet-5-5`), `method="json_schema"` for structured output, and no `temperature` (the model returns 400 for forced `tool_choice` and for `temperature`)
 - Google OAuth tokens stored in Supabase users table, not in session
 - pgvector chosen over Pinecone (corpus is too small for dedicated vector service)
 - Frontend auth state lives in localStorage (session JWT)

@@ -130,7 +130,7 @@ def _run_with_llm(state, search_results, llm_overview=None, llm_error=None):
         structured.invoke.return_value = llm_overview
     with (
         patch("agents.company.search_web", return_value=search_results),
-        patch("agents.company.ChatAnthropic", return_value=llm) as ctor,
+        patch("agents.llm.ChatAnthropic", return_value=llm) as ctor,
     ):
         out = company_research_node(state)
     return out, llm, structured, ctor
@@ -141,7 +141,9 @@ def test_summary_sources_are_result_urls():  # scenario 1
     overview = CompanyOverview(summary="Payments company", sources=[])
     out, llm, structured, _ = _run_with_llm({"company": "Stripe"}, results, overview)
 
-    llm.with_structured_output.assert_called_once_with(CompanyOverview)
+    llm.with_structured_output.assert_called_once_with(
+        CompanyOverview, method="json_schema"
+    )
     structured.invoke.assert_called_once()
     assert out["company_research"]["summary"] == "Payments company"
     assert out["company_research"]["sources"] == [r.url for r in results]
