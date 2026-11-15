@@ -35,12 +35,9 @@ function StatusBadge({ status }: { status: BriefingStatus }) {
 
 export default function Dashboard() {
   const router = useRouter();
-  const [email] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("email");
-    }
-    return null;
-  });
+  // null until the client has read localStorage, so server and first client
+  // render both show the same loading shell.
+  const [email, setEmail] = useState<string | null>(null);
   const [briefings, setBriefings] = useState<Briefing[]>([]);
   const [briefingsLoading, setBriefingsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +53,7 @@ export default function Dashboard() {
 
     // Fetch briefings
     const fetchBriefings = async () => {
+      setEmail(storedEmail);
       try {
         const res = await fetch(`${API_URL}/briefings?limit=20&offset=0`, {
           headers: {
@@ -95,7 +93,7 @@ export default function Dashboard() {
     router.push("/");
   };
 
-  if (briefingsLoading && !email) {
+  if (!email) {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <p className="text-gray-600">Loading...</p>
