@@ -116,3 +116,62 @@ def test_existing_warnings_preserved():  # scenario 11
     )
     assert out["warnings"][0] == "earlier"
     assert out["warnings"][1] == low_result_warning("Stripe", 1)
+
+
+# --- Slice 3: LLM summarization (scenarios 1, 7, 10) ---
+
+
+def _run_with_llm(state, search_results, llm_overview=None, llm_error=None):
+    llm = MagicMock()
+    structured = llm.with_structured_output.return_value
+    if llm_error:
+        structured.invoke.side_effect = llm_error
+    else:
+        structured.invoke.return_value = llm_overview
+    with (
+        patch("agents.company.search_web", return_value=search_results),
+        patch("agents.company.ChatAnthropic", return_value=llm) as ctor,
+    ):
+        out = company_research_node(state)
+    return out, llm, structured, ctor
+
+
+def test_summary_sources_are_result_urls():  # scenario 1
+    results = _results("a", "b", "c", "d", "e")
+    overview = CompanyOverview(summary="Payments company", sources=[])
+    out, llm, structured, _ = _run_with_llm({"company": "Stripe"}, results, overview)
+
+    llm.with_structured_output.assert_called_once_with(CompanyOverview)
+    structured.invoke.assert_called_once()
+    assert out["company_research"]["summary"] == "Payments company"
+    assert out["company_research"]["sources"] == [r.url for r in results]
+    assert out["warnings"] == []
+
+
+def test_prompt_contains_results_and_grounding_rule():
+    results = _results("a", "b", "c")
+    _, _, structured, _ = _run_with_llm(
+        {"company": "Stripe", "role": "SWE"}, results, CompanyOverview()
+    )
+    messages = structured.invoke.call_args.args[0]
+    text = " ".join(str(m[1] if isinstance(m, tuple) else m.content) for m in messages)
+    assert "Stripe" in text
+    assert "https://a.com" in text and "about b" in text
+    assert "do not include" in text.lower()
+
+
+def test_fabricated_sources_are_dropped():  # scenario 7
+    results = _results("a", "b", "c")
+    overview = CompanyOverview(summary="s", sources=["https://made-up.com"])
+    out, _, _, _ = _run_with_llm({"company": "Stripe"}, results, overview)
+    assert out["company_research"]["sources"] == [r.url for r in results]
+    assert "https://made-up.com" not in out["company_research"]["sources"]
+
+
+def test_llm_failure_propagates():  # scenario 10
+    with pytest.raises(RuntimeError, match="llm down"):
+        _run_with_llm(
+            {"company": "Stripe"},
+            _results("a", "b", "c"),
+            llm_error=RuntimeError("llm down"),
+        )
