@@ -28,11 +28,16 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - `agents/rag.py`: `rag_retrieval_node(state)` (LangGraph node contract; not yet wired into a graph)
 - Migration `003_retrieval_metadata.sql` (company/role columns) — **must be applied to Supabase**
 
+### ✅ Complete (Week 2, Company Intelligence) — specs/company-intelligence.md
+- `services/web_search.py`: Tavily wrapper (`search_web`), errors propagate
+- `agents/company.py`: `company_research_node(state)` — query ladder (max 3 attempts), retry when <2 results, low-result warning when <3, Claude structured-output summary into `CompanyOverview`, `sources` set from result URLs in code (not wired into a graph yet)
+- Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model overridable via `COMPANY_AGENT_MODEL`
+
 ### ⚠️ Partial
 - **Pipeline trigger**: POST /briefings creates DB record + embeds resume, but no LangGraph pipeline execution yet
 
 ### ❌ Not Started (Week 2+)
-- **Agent nodes**: company.py, interviewer.py, synthesis.py are empty (supervisor.py stays empty: fixed DAG, no supervisor)
+- **Agent nodes**: interviewer.py, synthesis.py are empty (supervisor.py stays empty: fixed DAG, no supervisor)
 - **Briefing chunk writer**: post-synthesis embedding of briefing sections (retrieval already reads them)
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
 - **LangGraph pipeline**: No StateGraph orchestration, no background task execution
@@ -40,7 +45,7 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - **RAGAS evaluation**: Not implemented
 
 ### Next Task
-**Week 2: Company Intelligence agent** (Tavily + retry loop when <2 results, low-result warning when <3 per ADR §1/§6) — spec it first with /spec
+**Week 2: Interviewer Research agent** (Tavily + retry loop when <2 results, low-result warning when <3, wrong-person risk per ADR §1/§6) — spec it first with /spec
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet
