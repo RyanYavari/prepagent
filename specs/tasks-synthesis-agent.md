@@ -5,8 +5,8 @@ Spec: `specs/synthesis-agent.md`
 ## Slice plan
 
 ### Slice 1: Validation, passthrough assembly, no-LLM paths
-- [ ] Write failing tests in `backend/tests/test_synthesis_node.py` (scenarios 1, 9, 11, 12, 13, 15, 16; `_generate` mocked)
-- [ ] Implement input validation, allowed-source/section collection, passthrough assembly, interviewer gating, no-context skip, `sources` in code in `backend/agents/synthesis.py`
+- [x] Write failing tests in `backend/tests/test_synthesis_node.py` (scenarios 1, 9, 11, 12, 13, 15, 16; `_generate` mocked)
+- [x] Implement input validation, allowed-source/section collection, passthrough assembly, interviewer gating, no-context skip, `sources` in code in `backend/agents/synthesis.py`
 - [ ] Run /review
 
 ### Slice 2: LLM generation + source-attribution prompt
