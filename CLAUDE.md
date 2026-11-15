@@ -41,19 +41,22 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - `agents/synthesis.py`: `synthesis_node(state)` — passes company overview and interviewer summary/background through, generates role insights, talking points and interviewer enrichment in one Claude structured-output call (source-attribution prompt per ADR §6 guardrail 1), then validates citations in code (guardrail 3): items need `[Source: <url>]` (url from company/interviewer sources) or `[Resume: <Section>]` (section from retrieved resume chunks), otherwise dropped with a count warning; empty talking points warn; no usable context skips the LLM; `role_insights.sources` set in code (not wired into a graph yet)
 - Needs `ANTHROPIC_API_KEY`; model overridable via `SYNTHESIS_AGENT_MODEL`
 
-### ⚠️ Partial
-- **Pipeline trigger**: POST /briefings creates DB record + embeds resume, but no LangGraph pipeline execution yet
+### ✅ Complete (Week 2, LangGraph pipeline) — specs/langgraph-pipeline.md
+- `agents/pipeline.py`: `build_graph()` fixed-DAG `StateGraph` (company + interviewer in parallel → RAG → synthesis, no supervisor); `run_pipeline(...)` sets status `running`, invokes the graph, persists `content` and sets `complete`, or sets `failed` (logged, never raises)
+- `agents/state.py`: `PipelineState` with a de-duplicating `warnings` reducer (parallel branches)
+- POST /briefings schedules `run_pipeline` via `BackgroundTasks` with the JWT user id; node warnings persist in `content.warnings` (`BriefingSections.warnings`)
+- Needs all node env vars (`TAVILY_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) and migration 003 applied; LangSmith traces via `LANGSMITH_*` env vars
 
 ### ❌ Not Started (Week 2+)
 - **supervisor.py** stays empty: fixed DAG, no supervisor
 - **Briefing chunk writer**: post-synthesis embedding of briefing sections (retrieval already reads them)
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
-- **LangGraph pipeline**: No StateGraph orchestration, no background task execution
-- **Briefing viewer**: No page to display generated briefing content
+- **Briefing viewer**: No page to display generated briefing content (frontend must poll GET /briefings/{id} for status)
 - **RAGAS evaluation**: Not implemented
+- Failure reason is not persisted (only `failed` status); a crash mid-run leaves the row `running`
 
 ### Next Task
-**Week 2: LangGraph wiring** of the four nodes (company + interviewer in parallel → RAG → synthesis), then pipeline trigger from POST /briefings and persisting `briefing_content` — spec it first with /spec
+**Week 2/3: Briefing viewer page** (poll status, render the 4 sections + warnings), then the **briefing chunk writer** — spec it first with /spec
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet

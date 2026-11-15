@@ -30,6 +30,13 @@ def override_get_current_user(mock_user_id):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def _no_real_pipeline():
+    """Never run the real pipeline from endpoint tests; tests assert on the mock."""
+    with patch("routers.research.run_pipeline"):
+        yield
+
+
 @pytest.fixture
 def client_with_auth(override_get_current_user):
     """Test client with mocked authentication."""
@@ -276,3 +283,83 @@ class TestBriefingViewWithWarnings:
         resp = self._get(client_with_auth, {"company_overview": {"summary": "x"}})
         assert resp.status_code == 200
         assert resp.json()["content"]["warnings"] == []
+
+
+class TestCreateBriefingTriggersPipeline:
+    """Scenarios 8 and 9: POST /briefings schedules the pipeline."""
+
+    def _supabase(self, mock_user_id):
+        sb = MagicMock()
+        sb.table.return_value.insert.return_value.execute.return_value.data = [
+            {
+                "id": "b-123",
+                "user_id": mock_user_id,
+                "company": "Stripe",
+                "interviewer": "Jane Doe",
+                "role": "Engineer",
+                "interview_date": None,
+                "status": "pending",
+                "created_at": "2026-01-01T00:00:00Z",
+            }
+        ]
+        return sb
+
+    @patch("routers.research.run_pipeline")
+    @patch("routers.research._get_supabase")
+    def test_schedules_pipeline_with_jwt_identity(
+        self, mock_supabase_fn, mock_run, client_with_auth, mock_user_id
+    ):
+        mock_supabase_fn.return_value = self._supabase(mock_user_id)
+
+        resp = client_with_auth.post(
+            "/briefings",
+            json={
+                "company": "Stripe",
+                "interviewer": "Jane Doe",
+                "role": "Engineer",
+                "user_id": "attacker-id",
+            },
+        )
+
+        assert resp.status_code == 201
+        assert resp.json()["status"] == "pending"
+        assert resp.json()["content"] is None
+        mock_run.assert_called_once_with(
+            briefing_id="b-123",
+            user_id=mock_user_id,
+            company="Stripe",
+            interviewer="Jane Doe",
+            role="Engineer",
+        )
+
+    @patch("routers.research.run_pipeline")
+    @patch("routers.research._get_supabase")
+    def test_no_pipeline_when_insert_fails(
+        self, mock_supabase_fn, mock_run, client_with_auth
+    ):
+        sb = MagicMock()
+        sb.table.return_value.insert.return_value.execute.side_effect = RuntimeError(
+            "db"
+        )
+        mock_supabase_fn.return_value = sb
+
+        resp = client_with_auth.post("/briefings", json={"company": "Stripe"})
+
+        assert resp.status_code == 500
+        mock_run.assert_not_called()
+
+    @patch("routers.research.run_pipeline")
+    @patch("routers.research.process_resume_embedding")
+    @patch("routers.research._get_supabase")
+    def test_no_pipeline_when_resume_embedding_fails(
+        self, mock_supabase_fn, mock_embed, mock_run, client_with_auth
+    ):
+        mock_supabase_fn.return_value = MagicMock()
+        mock_embed.side_effect = OpenAIError("down")
+
+        resp = client_with_auth.post(
+            "/briefings", json={"company": "Stripe", "resume_text": "Experience\nx"}
+        )
+
+        assert resp.status_code == 503
+        mock_run.assert_not_called()
