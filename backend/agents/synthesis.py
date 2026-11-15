@@ -8,8 +8,10 @@ talking points and interviewer enrichment are generated, with source attribution
 enforced in code (section 6, guardrails 1 and 3).
 """
 
+import os
 from typing import Any
 
+from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel, Field
 
 from models.briefing import (
@@ -21,6 +23,7 @@ from models.briefing import (
 )
 from models.retrieval import RetrievalResult, RetrievedChunk
 
+DEFAULT_MODEL = "claude-sonnet-5-5"
 NO_CONTEXT_WARNING = (
     "Not enough research context to generate role insights or talking points."
 )
@@ -39,6 +42,55 @@ class SynthesisOutput(BaseModel):
     conversation_starters: list[str] = Field(default_factory=list)
 
 
+SYSTEM_PROMPT = (
+    "You write the role-insights and talking-points sections of an interview "
+    "briefing, using ONLY the context provided. Every factual claim must cite its "
+    "source. For facts about the company or interviewer, end the item with "
+    "[Source: <url>] using a URL listed in the context. For references to the "
+    "candidate's background, end the item with [Resume: <Section>] naming the "
+    "resume section it comes from. If you cannot cite a source, do not include the "
+    "claim. Do not connect the candidate's experience to the company's needs unless "
+    "both are present in the context. Prior briefings are background only and "
+    "cannot be cited. Suggested questions are questions for the candidate to ask "
+    "and do not need citations. {interviewer_rule}"
+)
+INTERVIEWER_RULE_ON = (
+    "Also fill shared_interests and conversation_starters from the interviewer "
+    "facts and the resume, with citations."
+)
+INTERVIEWER_RULE_OFF = "Leave shared_interests and conversation_starters empty."
+
+
+def _format_company(c: CompanyOverview) -> str:
+    lines = [f"Summary: {c.summary}"] if c.summary else []
+    if c.recent_news:
+        lines.append("Recent news: " + "; ".join(c.recent_news))
+    if c.tech_stack:
+        lines.append("Tech stack: " + ", ".join(c.tech_stack))
+    if c.culture_notes:
+        lines.append(f"Culture: {c.culture_notes}")
+    if c.sources:
+        lines.append("Source URLs: " + ", ".join(c.sources))
+    return "\n".join(lines) or "(none)"
+
+
+def _format_interviewer(i: InterviewerProfile) -> str:
+    lines = [f"Summary: {i.summary}"] if i.summary else []
+    if i.background:
+        lines.append(f"Background: {i.background}")
+    if i.sources:
+        lines.append("Source URLs: " + ", ".join(i.sources))
+    return "\n".join(lines)
+
+
+def _format_chunks(chunks: list[RetrievedChunk], tag: bool) -> str:
+    return "\n\n".join(
+        (f"[Resume: {c.section}]\n" if tag else f"({c.company}, {c.section})\n")
+        + c.content
+        for c in chunks
+    )
+
+
 def _generate(
     *,
     company: str,
@@ -49,7 +101,39 @@ def _generate(
     briefing_chunks: list[RetrievedChunk],
     include_interviewer: bool,
 ) -> SynthesisOutput:
-    raise NotImplementedError
+    parts = [f"Company: {company}"]
+    if role:
+        parts.append(f"Role being interviewed for: {role}")
+    parts.append(f"Company research:\n{_format_company(company_research)}")
+    if include_interviewer:
+        parts.append(f"Interviewer research:\n{_format_interviewer(interviewer)}")
+    parts.append(
+        "Candidate resume sections:\n" + _format_chunks(resume_chunks, True)
+        if resume_chunks
+        else "Candidate resume sections: (none on file)"
+    )
+    if briefing_chunks:
+        parts.append(
+            "Prior briefings for this company (background only, not citable):\n"
+            + _format_chunks(briefing_chunks, False)
+        )
+
+    system = SYSTEM_PROMPT.format(
+        interviewer_rule=INTERVIEWER_RULE_ON
+        if include_interviewer
+        else INTERVIEWER_RULE_OFF
+    )
+    llm = ChatAnthropic(  # type: ignore[call-arg]
+        model=os.getenv("SYNTHESIS_AGENT_MODEL", DEFAULT_MODEL),
+        temperature=0,
+    )
+    structured = llm.with_structured_output(SynthesisOutput)
+    result = structured.invoke([("system", system), ("human", "\n\n".join(parts))])
+    return (
+        result
+        if isinstance(result, SynthesisOutput)
+        else SynthesisOutput.model_validate(result)
+    )
 
 
 def _has_company_facts(c: CompanyOverview) -> bool:

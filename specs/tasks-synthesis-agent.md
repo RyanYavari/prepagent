@@ -10,8 +10,8 @@ Spec: `specs/synthesis-agent.md`
 - [ ] Run /review
 
 ### Slice 2: LLM generation + source-attribution prompt
-- [ ] Write failing tests (scenarios 2, 14, plus structured-output wiring with mocked ChatAnthropic)
-- [ ] Implement `SynthesisOutput`, `_generate` with the attribution prompt and context formatting
+- [x] Write failing tests (scenarios 2, 14, plus structured-output wiring with mocked ChatAnthropic)
+- [x] Implement `SynthesisOutput`, `_generate` with the attribution prompt and context formatting
 - [ ] Run /review
 
 ### Slice 3: Citation validation + warnings

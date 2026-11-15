@@ -144,3 +144,92 @@ def test_missing_upstream_keys_tolerated(missing):  # scenario 16
     del state[missing]
     out, _ = _run(state)
     BriefingSections.model_validate(out["briefing_content"])
+
+
+# --- Slice 2: LLM generation + attribution prompt ---
+
+
+def _run_with_llm(state, llm_output=None, side_effect=None):
+    structured = MagicMock()
+    if side_effect:
+        structured.invoke.side_effect = side_effect
+    else:
+        structured.invoke.return_value = llm_output or _output()
+    llm = MagicMock()
+    llm.with_structured_output.return_value = structured
+    with patch("agents.synthesis.ChatAnthropic", return_value=llm) as ctor:
+        out = synthesis_node(state)
+    return out, llm, structured, ctor
+
+
+def _prompt_text(structured):
+    messages = structured.invoke.call_args.args[0]
+    return {m[0]: m[1] for m in messages}  # {"system": ..., "human": ...}
+
+
+def test_llm_wired_with_structured_output():
+    out, llm, structured, ctor = _run_with_llm(_state())
+    llm.with_structured_output.assert_called_once_with(SynthesisOutput)
+    structured.invoke.assert_called_once()
+    assert ctor.call_args.kwargs["temperature"] == 0
+    assert out["briefing_content"]["talking_points"]["talking_points"]
+
+
+def test_model_overridable_via_env(monkeypatch):
+    monkeypatch.setenv("SYNTHESIS_AGENT_MODEL", "claude-custom")
+    _, _, _, ctor = _run_with_llm(_state())
+    assert ctor.call_args.kwargs["model"] == "claude-custom"
+
+
+def test_system_prompt_requires_source_attribution():  # scenario 2
+    _, _, structured, _ = _run_with_llm(_state())
+    system = _prompt_text(structured)["system"]
+    assert "cite" in system.lower()
+    assert "[Source:" in system and "[Resume:" in system
+    assert "do not include" in system.lower()
+
+
+def test_human_message_contains_context_with_sources():  # scenario 2
+    state = _state(
+        retrieved_context={
+            "resume_chunks": [
+                {"doc_type": "resume", "section": "Experience", "content": "Built APIs"}
+            ],
+            "briefing_chunks": [
+                {
+                    "doc_type": "briefing",
+                    "section": "talking_points",
+                    "content": "Old Stripe point",
+                    "company": "Stripe",
+                }
+            ],
+        }
+    )
+    _, _, structured, _ = _run_with_llm(state)
+    human = _prompt_text(structured)["human"]
+
+    assert COMPANY in human and "Backend Engineer" in human
+    assert "Payments company" in human and "Raised funding" in human
+    assert "Ruby" in human and "Writing culture" in human
+    assert URL_C in human and URL_I in human
+    assert "Staff engineer" in human and "Ex-Google" in human
+    assert "[Resume: Experience]" in human and "Built APIs" in human
+    assert "Old Stripe point" in human
+
+
+def test_interviewer_section_omitted_from_prompt_when_empty():
+    _, _, structured, _ = _run_with_llm(_state(interviewer_research={}))
+    human = _prompt_text(structured)["human"]
+    assert "Staff engineer" not in human
+    system = _prompt_text(structured)["system"]
+    assert "Leave shared_interests and conversation_starters empty" in system
+
+
+def test_llm_failure_propagates():  # scenario 14
+    with pytest.raises(RuntimeError, match="boom"):
+        _run_with_llm(_state(), side_effect=RuntimeError("boom"))
+
+
+def test_dict_result_from_llm_is_validated():
+    out, *_ = _run_with_llm(_state(), llm_output=_output().model_dump())
+    assert out["briefing_content"]["role_insights"]["key_requirements"]
