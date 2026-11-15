@@ -66,6 +66,7 @@ class BriefingSections(BaseModel):
     interviewer_profile: InterviewerProfile = Field(default_factory=InterviewerProfile)
     role_insights: RoleInsights = Field(default_factory=RoleInsights)
     talking_points: TalkingPoints = Field(default_factory=TalkingPoints)
+    warnings: list[str] = Field(default_factory=list)
 
 
 # --- Response models ---

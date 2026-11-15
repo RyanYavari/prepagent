@@ -246,3 +246,33 @@ class TestCreateBriefingWithResume:
         # process_resume_embedding internally calls delete_user_resume_embeddings
         # We verified this in the unit tests for process_resume_embedding
         mock_process_resume.assert_called_once()
+
+
+class TestBriefingViewWithWarnings:
+    """Scenario 10: GET /briefings/{id} returns persisted warnings."""
+
+    def _get(self, client, content):
+        with patch("routers.research._get_supabase") as fn:
+            sb = MagicMock()
+            fn.return_value = sb
+            sb.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = [
+                {
+                    "id": "b1",
+                    "user_id": "u",
+                    "company": "Stripe",
+                    "status": "complete",
+                    "content": content,
+                    "created_at": "2026-01-01T00:00:00Z",
+                }
+            ]
+            return client.get("/briefings/b1")
+
+    def test_returns_warnings(self, client_with_auth):
+        resp = self._get(client_with_auth, {"warnings": ["limited info"]})
+        assert resp.status_code == 200
+        assert resp.json()["content"]["warnings"] == ["limited info"]
+
+    def test_legacy_content_without_warnings(self, client_with_auth):
+        resp = self._get(client_with_auth, {"company_overview": {"summary": "x"}})
+        assert resp.status_code == 200
+        assert resp.json()["content"]["warnings"] == []
