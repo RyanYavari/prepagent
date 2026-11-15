@@ -93,12 +93,15 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - Environment variables in .env, never hardcoded
 - Conventional commits: feat:, fix:, refactor:, test:, docs:, chore:
 - No Co-Authored-By lines in commit messages
+- One commit per spec: build all slices, then commit once after `pytest -x -q` passes and /review is APPROVE. Do not commit after each slice. (The spec/tasks docs may be committed first on their own.)
+- Endpoint tests must patch `routers.research.run_pipeline`, otherwise the real pipeline runs as a background task
 
 ## What Claude gets wrong
 - Running `ruff format <dir>` then `git add -u` sweeps unrelated files into a commit. Format only the files you changed, and stage them by name.
 
 - On macOS, `sed -i` needs an explicit backup-suffix argument (`sed -i ''`) and fails on multi-line edits. Use the Edit tool or a Python script instead.
 - Task files (`specs/tasks-*.md`) get their "Run /review" boxes ticked only if a review actually ran for that slice. Don't leave them unchecked after the final review passes.
+- In zsh, a variable holding several file names (`F="a b"; ruff check $F`) is not split into separate arguments. Pass the files directly.
 
 ## Known local issues
 - mypy 2.4.1 crashes with "INTERNAL ERROR" locally, even on untouched files, so type-checking can't be verified here; rely on CI. Pin not bumped yet.

@@ -7,6 +7,9 @@ description: Stage and commit with conventional commit message format
 
 Create a well-formatted conventional commit.
 
+## When to commit
+One commit per spec, not per slice. Build every slice of the spec first, then commit once, after `pytest -x -q` passes and /review returns APPROVE. Do not run this skill after each slice. Spec and task documents may be committed first as their own `docs:` commit.
+
 ## Steps
 
 1. Run `git status` and `git diff --staged` to see what's ready.
