@@ -4,7 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agents.interviewer import interviewer_research_node
+from agents.interviewer import (
+    interviewer_research_node,
+    low_result_warning,
+    wrong_person_warning,
+)
 from models.briefing import InterviewerProfile
 from models.research import SearchResult
 
@@ -139,3 +143,55 @@ def test_query_without_role_has_no_stray_text():  # scenario 12
 def test_existing_warnings_preserved():  # scenario 14
     out, _, _ = _run(_state(warnings=["earlier"]), [_hits("a", "b", "c")])
     assert out["warnings"][0] == "earlier"
+
+
+def test_two_relevant_adds_low_result_warning():  # scenario 4
+    out, _, summarize = _run(_state(), [_hits("a", "b")])
+    assert summarize.call_count == 1
+    assert low_result_warning(NAME, 2) in out["warnings"]
+    assert "Limited public information available for Jane Doe" in out["warnings"][0]
+    assert "based on 2 sources" in out["warnings"][0]
+
+
+def test_three_relevant_has_no_low_result_warning():  # scenario 4
+    out, _, _ = _run(_state(), [_hits("a", "b", "c")])
+    assert out["warnings"] == []
+
+
+def test_zero_relevant_adds_low_result_warning_n0():  # scenario 5
+    out, _, _ = _run(_state(), [[], [], []])
+    assert out["warnings"] == [low_result_warning(NAME, 0)]
+
+
+def test_wrong_person_warning_when_no_company_mention():  # scenario 7
+    out, _, summarize = _run(_state(), [_hits("a", "b", "c", company=None)])
+    assert summarize.call_count == 1
+    assert out["warnings"] == [wrong_person_warning(NAME, COMPANY)]
+
+
+def test_no_wrong_person_warning_when_one_result_mentions_company():  # scenario 7
+    results = _hits("a", "b", company=None) + _hits("c")
+    out, _, _ = _run(_state(), [results])
+    assert out["warnings"] == []
+
+
+def test_company_mention_is_case_insensitive():  # scenario 7
+    results = [
+        SearchResult(title="t", url=f"https://{k}.com", content=f"{NAME} at STRIPE")
+        for k in "abc"
+    ]
+    out, _, _ = _run(_state(), [results])
+    assert out["warnings"] == []
+
+
+def test_low_result_and_wrong_person_warnings_both_added():  # scenarios 4+7
+    out, _, _ = _run(_state(), [_hits("a", company=None), _hits("b", company=None)])
+    assert out["warnings"] == [
+        low_result_warning(NAME, 2),
+        wrong_person_warning(NAME, COMPANY),
+    ]
+
+
+def test_zero_relevant_has_no_wrong_person_warning():  # scenario 5/7
+    out, _, _ = _run(_state(), [[], [], []])
+    assert wrong_person_warning(NAME, COMPANY) not in out["warnings"]

@@ -10,8 +10,8 @@ Spec: `specs/interviewer-research.md`
 - [ ] Run /review
 
 ### Slice 2: Warnings (low-result + wrong-person)
-- [ ] Write failing tests (scenarios 4, 7)
-- [ ] Implement `low_result_warning`, wrong-person warning, company-confirmed check
+- [x] Write failing tests (scenarios 4, 7)
+- [x] Implement `low_result_warning`, wrong-person warning, company-confirmed check
 - [ ] Run /review
 
 ### Slice 3: LLM summarization + sources guardrail

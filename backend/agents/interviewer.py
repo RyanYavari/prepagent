@@ -16,6 +16,21 @@ from services.web_search import search_web
 
 MAX_ATTEMPTS = 3
 RETRY_THRESHOLD = 2  # retry while fewer than this many relevant results (ADR section 1)
+WARNING_THRESHOLD = 3  # warn when fewer than this many results (ADR section 6)
+
+
+def low_result_warning(interviewer: str, count: int) -> str:
+    return (
+        f"Limited public information available for {interviewer}. "
+        f"The following profile is based on {count} sources and may be incomplete."
+    )
+
+
+def wrong_person_warning(interviewer: str, company: str) -> str:
+    return (
+        f"Could not confirm that these sources refer to {interviewer} at {company}. "
+        "Verify this is the right person before relying on the profile."
+    )
 
 
 def _build_queries(interviewer: str, company: str, role: str | None) -> list[str]:
@@ -70,6 +85,11 @@ def interviewer_research_node(state: dict[str, Any]) -> dict[str, Any]:
             break
 
     results = list(collected.values())
+    if len(results) < WARNING_THRESHOLD:
+        warnings.append(low_result_warning(interviewer, len(results)))
+    if results and not any(_mentions(r, company) for r in results):
+        warnings.append(wrong_person_warning(interviewer, company))
+
     profile = (
         _summarize(interviewer, company, role, results)
         if results
