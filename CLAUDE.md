@@ -58,7 +58,8 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 
 ## Commands
 ```bash
-# Backend
+# Backend (activate the venv first: ruff/pytest are only on PATH inside it)
+source backend/venv/bin/activate
 cd backend && uvicorn main:app --reload
 ruff check . --fix
 ruff format .
@@ -84,6 +85,9 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 
 ## What Claude gets wrong
 - Running `ruff format <dir>` then `git add -u` sweeps unrelated files into a commit. Format only the files you changed, and stage them by name.
+
+## Known local issues
+- mypy 2.4.1 crashes with "INTERNAL ERROR" locally, even on untouched files, so type-checking can't be verified here; rely on CI. Pin not bumped yet.
 
 ## Testing
 - pytest for backend, run with `pytest -x -q` from backend/

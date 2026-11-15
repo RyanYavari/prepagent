@@ -32,7 +32,7 @@ type: short description (imperative mood, <72 chars)
 
 5. Commit with the message.
 
-6. Run `pytest -x -q` after committing to confirm nothing broke.
+6. Run `cd backend && pytest -x -q` (with the venv activated) after committing to confirm nothing broke.
 
 ## Rules
 - Imperative mood: "add feature" not "added feature" or "adds feature"
