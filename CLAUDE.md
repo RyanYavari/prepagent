@@ -90,6 +90,9 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 ## What Claude gets wrong
 - Running `ruff format <dir>` then `git add -u` sweeps unrelated files into a commit. Format only the files you changed, and stage them by name.
 
+- On macOS, `sed -i` needs an explicit backup-suffix argument (`sed -i ''`) and fails on multi-line edits. Use the Edit tool or a Python script instead.
+- Task files (`specs/tasks-*.md`) get their "Run /review" boxes ticked only if a review actually ran for that slice. Don't leave them unchecked after the final review passes.
+
 ## Known local issues
 - mypy 2.4.1 crashes with "INTERNAL ERROR" locally, even on untouched files, so type-checking can't be verified here; rely on CI. Pin not bumped yet.
 
