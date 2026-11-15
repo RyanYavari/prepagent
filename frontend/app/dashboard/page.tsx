@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -146,9 +147,10 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-3">
               {briefings.map((briefing) => (
-                <div
+                <Link
                   key={briefing.id}
-                  className="border rounded-lg p-4 hover:shadow-sm transition-shadow"
+                  href={`/prep/${briefing.id}`}
+                  className="block border rounded-lg p-4 hover:shadow-sm transition-shadow"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -173,7 +175,7 @@ export default function Dashboard() {
                       {new Date(briefing.created_at).toLocaleDateString()}
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}

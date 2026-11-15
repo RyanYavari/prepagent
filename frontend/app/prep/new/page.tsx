@@ -86,7 +86,8 @@ export default function NewBriefing() {
         throw new Error(errData.detail || "Failed to create briefing");
       }
 
-      router.push("/dashboard");
+      const created = await res.json();
+      router.push(`/prep/${created.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create briefing");
     } finally {
