@@ -8,7 +8,10 @@ not mention the interviewer by name are dropped so a common name cannot pull in
 a different person (section 6, failure mode 3).
 """
 
+import os
 from typing import Any
+
+from langchain_anthropic import ChatAnthropic
 
 from models.briefing import InterviewerProfile
 from models.research import SearchResult
@@ -16,6 +19,7 @@ from services.web_search import search_web
 
 MAX_ATTEMPTS = 3
 RETRY_THRESHOLD = 2  # retry while fewer than this many relevant results (ADR section 1)
+DEFAULT_MODEL = "claude-sonnet-5-5"
 WARNING_THRESHOLD = 3  # warn when fewer than this many results (ADR section 6)
 
 
@@ -43,13 +47,52 @@ def _mentions(result: SearchResult, text: str) -> bool:
     return text.lower() in f"{result.title} {result.content}".lower()
 
 
+SYSTEM_PROMPT = (
+    "You write the interviewer-profile section of an interview briefing. "
+    "Use ONLY the numbered search results provided. Include facts only about a "
+    "person who is clearly the named interviewer at the named company. If the "
+    "results appear to describe different people with the same name, or you cannot "
+    "tell, leave the fields empty rather than guessing. Every factual claim must "
+    "come from those results; do not include claims the results do not support. "
+    "Fill summary and background only; leave shared_interests and "
+    "conversation_starters empty."
+)
+
+
 def _summarize(
     interviewer: str,
     company: str,
     role: str | None,
     results: list[SearchResult],
 ) -> InterviewerProfile:
-    raise NotImplementedError  # slice 3
+    formatted = "\n\n".join(
+        f"[{i}] {r.title}\nURL: {r.url}\n{r.content}"
+        for i, r in enumerate(results, start=1)
+    )
+    role_line = f"Role being interviewed for: {role}\n" if role else ""
+    llm = ChatAnthropic(  # type: ignore[call-arg]
+        model=os.getenv("INTERVIEWER_AGENT_MODEL", DEFAULT_MODEL),
+        temperature=0,
+    )
+    structured = llm.with_structured_output(InterviewerProfile)
+    profile = structured.invoke(
+        [
+            ("system", SYSTEM_PROMPT),
+            (
+                "human",
+                f"Interviewer: {interviewer}\nCompany: {company}\n{role_line}\n"
+                + f"Search results:\n{formatted}",
+            ),
+        ]
+    )
+    result = (
+        profile
+        if isinstance(profile, InterviewerProfile)
+        else InterviewerProfile.model_validate(profile)
+    )
+    # Sources are set in code so the model cannot cite a URL it was not given.
+    result.sources = [r.url for r in results]
+    return result
 
 
 def interviewer_research_node(state: dict[str, Any]) -> dict[str, Any]:

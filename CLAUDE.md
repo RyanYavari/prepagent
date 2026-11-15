@@ -33,11 +33,15 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - `agents/company.py`: `company_research_node(state)` — query ladder (max 3 attempts), retry when <2 results, low-result warning when <3, Claude structured-output summary into `CompanyOverview`, `sources` set from result URLs in code (not wired into a graph yet)
 - Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model overridable via `COMPANY_AGENT_MODEL`
 
+### ✅ Complete (Week 2, Interviewer Research) — specs/interviewer-research.md
+- `agents/interviewer.py`: `interviewer_research_node(state)` — skips (empty profile, no warning) when no interviewer; query ladder (max 3), drops results that don't mention the interviewer's full name, retry when <2 relevant, low-result warning when <3, wrong-person warning when no result mentions the company, Claude structured-output summary into `InterviewerProfile` (summary/background only), `sources` set from result URLs in code (not wired into a graph yet)
+- Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model overridable via `INTERVIEWER_AGENT_MODEL`
+
 ### ⚠️ Partial
 - **Pipeline trigger**: POST /briefings creates DB record + embeds resume, but no LangGraph pipeline execution yet
 
 ### ❌ Not Started (Week 2+)
-- **Agent nodes**: interviewer.py, synthesis.py are empty (supervisor.py stays empty: fixed DAG, no supervisor)
+- **Agent nodes**: synthesis.py is empty (supervisor.py stays empty: fixed DAG, no supervisor)
 - **Briefing chunk writer**: post-synthesis embedding of briefing sections (retrieval already reads them)
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
 - **LangGraph pipeline**: No StateGraph orchestration, no background task execution
@@ -45,7 +49,7 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - **RAGAS evaluation**: Not implemented
 
 ### Next Task
-**Week 2: Interviewer Research agent** (Tavily + retry loop when <2 results, low-result warning when <3, wrong-person risk per ADR §1/§6) — spec it first with /spec
+**Week 2: Synthesis agent** (4-section briefing from company + interviewer + RAG output; source-attribution prompt per ADR §6 guardrail 1) or **LangGraph wiring** of the three existing nodes — spec it first with /spec
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet

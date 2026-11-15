@@ -15,9 +15,9 @@ Spec: `specs/interviewer-research.md`
 - [ ] Run /review
 
 ### Slice 3: LLM summarization + sources guardrail
-- [ ] Write failing tests (scenarios 11, 13, plus prompt/structured-output wiring with mocked ChatAnthropic)
-- [ ] Implement `_summarize` with grounding prompt; overwrite `sources` from results
-- [ ] Update CLAUDE.md Current State / Next Task
+- [x] Write failing tests (scenarios 11, 13, plus prompt/structured-output wiring with mocked ChatAnthropic)
+- [x] Implement `_summarize` with grounding prompt; overwrite `sources` from results
+- [x] Update CLAUDE.md Current State / Next Task
 - [ ] Run /review
 
 ## Done checklist

@@ -195,3 +195,79 @@ def test_low_result_and_wrong_person_warnings_both_added():  # scenarios 4+7
 def test_zero_relevant_has_no_wrong_person_warning():  # scenario 5/7
     out, _, _ = _run(_state(), [[], [], []])
     assert wrong_person_warning(NAME, COMPANY) not in out["warnings"]
+
+
+# --- Slice 3: LLM summarization (scenarios 1, 11, 13) ---
+
+
+def _run_with_llm(state, search_results, llm_profile=None, llm_error=None):
+    llm = MagicMock()
+    structured = llm.with_structured_output.return_value
+    if llm_error:
+        structured.invoke.side_effect = llm_error
+    else:
+        structured.invoke.return_value = llm_profile
+    with (
+        patch("agents.interviewer.search_web", return_value=search_results),
+        patch("agents.interviewer.ChatAnthropic", return_value=llm) as ctor,
+    ):
+        out = interviewer_research_node(state)
+    return out, llm, structured, ctor
+
+
+def test_summary_sources_are_result_urls():  # scenario 1
+    results = _hits("a", "b", "c", "d")
+    profile = InterviewerProfile(summary="Staff engineer", sources=[])
+    out, llm, structured, _ = _run_with_llm(_state(), results, profile)
+
+    llm.with_structured_output.assert_called_once_with(InterviewerProfile)
+    structured.invoke.assert_called_once()
+    assert out["interviewer_research"]["summary"] == "Staff engineer"
+    assert out["interviewer_research"]["sources"] == [r.url for r in results]
+    assert out["warnings"] == []
+
+
+def test_prompt_contains_results_and_grounding_rules():
+    results = _hits("a", "b", "c")
+    _, _, structured, _ = _run_with_llm(
+        _state(role="SWE"), results, InterviewerProfile()
+    )
+    messages = structured.invoke.call_args.args[0]
+    text = " ".join(str(m[1] if isinstance(m, tuple) else m.content) for m in messages)
+    assert NAME in text and COMPANY in text
+    assert "https://a.com" in text and f"{NAME} works at {COMPANY}" in text
+    assert "do not include" in text.lower()
+    assert "different people" in text.lower()
+
+
+def test_fabricated_sources_are_dropped():  # scenario 11
+    results = _hits("a", "b", "c")
+    profile = InterviewerProfile(summary="s", sources=["https://made-up.com"])
+    out, _, _, _ = _run_with_llm(_state(), results, profile)
+    assert out["interviewer_research"]["sources"] == [r.url for r in results]
+
+
+def test_llm_returning_dict_is_validated():
+    out, _, _, _ = _run_with_llm(_state(), _hits("a", "b", "c"), {"summary": "d"})
+    assert out["interviewer_research"]["summary"] == "d"
+
+
+def test_model_overridable_via_env(monkeypatch):
+    monkeypatch.setenv("INTERVIEWER_AGENT_MODEL", "custom-model")
+    _, _, _, ctor = _run_with_llm(_state(), _hits("a", "b", "c"), InterviewerProfile())
+    assert ctor.call_args.kwargs["model"] == "custom-model"
+
+
+def test_llm_failure_propagates():  # scenario 13
+    with pytest.raises(RuntimeError, match="llm down"):
+        _run_with_llm(
+            _state(), _hits("a", "b", "c"), llm_error=RuntimeError("llm down")
+        )
+
+
+def test_search_failure_propagates():  # scenario 13
+    with (
+        patch("agents.interviewer.search_web", side_effect=RuntimeError("tavily")),
+        pytest.raises(RuntimeError, match="tavily"),
+    ):
+        interviewer_research_node(_state())
