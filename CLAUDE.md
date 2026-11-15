@@ -47,16 +47,21 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - POST /briefings schedules `run_pipeline` via `BackgroundTasks` with the JWT user id; node warnings persist in `content.warnings` (`BriefingSections.warnings`)
 - Needs all node env vars (`TAVILY_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) and migration 003 applied; LangSmith traces via `LANGSMITH_*` env vars
 
+### ✅ Complete (Week 2/3, Briefing viewer) — specs/briefing-viewer.md
+- `/prep/[id]` (frontend/app/prep/[id]/page.tsx): polls GET /briefings/{id} every 3s while pending/running (5-min cap, stops after 3 consecutive errors, "Check again"), failed/404/401 states, renders the 4 sections via `components/BriefingSections.tsx`
+- `lib/citations.ts` `parseCitations`: `[Source: url]` → hostname link (http/https only, noopener), `[Resume: Section]` → chip; untagged generated items get a "no source" marker; `content.warnings` shown in an amber alert above the sections
+- Dashboard cards and /prep/new now link/redirect to the viewer
+- Frontend tests: vitest (`npm test`, runs in CI). **Polling/auth/404/navigation were never run in a browser** — manual checks in `specs/tasks-briefing-viewer.md` are still unticked
+
 ### ❌ Not Started (Week 2+)
 - **supervisor.py** stays empty: fixed DAG, no supervisor
 - **Briefing chunk writer**: post-synthesis embedding of briefing sections (retrieval already reads them)
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
-- **Briefing viewer**: No page to display generated briefing content (frontend must poll GET /briefings/{id} for status)
 - **RAGAS evaluation**: Not implemented
 - Failure reason is not persisted (only `failed` status); a crash mid-run leaves the row `running`
 
 ### Next Task
-**Week 2/3: Briefing viewer page** (poll status, render the 4 sections + warnings), then the **briefing chunk writer** — spec it first with /spec
+**Manually verify the briefing viewer** (run backend + frontend, create a briefing, watch it poll to complete), then the **briefing chunk writer** — spec it first with /spec
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet
@@ -79,6 +84,7 @@ pytest -x -q
 # Frontend
 cd frontend && npm run dev
 npm run lint
+npm test
 npm run build
 ```
 
