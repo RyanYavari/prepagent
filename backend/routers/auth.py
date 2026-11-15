@@ -6,7 +6,11 @@ from fastapi import APIRouter, HTTPException, Query
 from supabase import create_client
 
 from models.user import AuthURLResponse, TokenResponse
-from services.google_auth import build_authorization_url, exchange_code_for_tokens
+from services.google_auth import (
+    InvalidOAuthStateError,
+    build_authorization_url,
+    exchange_code_for_tokens,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -45,11 +49,14 @@ async def auth_google():
 @router.get("/callback", response_model=TokenResponse)
 async def auth_callback(
     code: str = Query(..., description="OAuth authorization code"),
+    state: str = Query(..., description="OAuth state issued by /auth/google"),
 ):
     """Exchange OAuth code for tokens, upsert user, return session JWT."""
     # Exchange code for Google tokens + user info
     try:
-        token_data = await exchange_code_for_tokens(code)
+        token_data = await exchange_code_for_tokens(code, state)
+    except InvalidOAuthStateError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Token exchange failed: {e}")
 

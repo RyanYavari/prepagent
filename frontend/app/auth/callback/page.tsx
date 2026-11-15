@@ -30,7 +30,7 @@ function AuthCallbackContent() {
 
       try {
         const res = await fetch(
-          `${API_URL}/auth/callback?code=${encodeURIComponent(code)}`
+          `${API_URL}/auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(stateFromGoogle)}`
         );
 
         if (!res.ok) {
