@@ -233,3 +233,131 @@ def test_llm_failure_propagates():  # scenario 14
 def test_dict_result_from_llm_is_validated():
     out, *_ = _run_with_llm(_state(), llm_output=_output().model_dump())
     assert out["briefing_content"]["role_insights"]["key_requirements"]
+
+
+# --- Slice 3: citation validation + warnings ---
+
+DROPPED = "Removed {n} generated items that lacked a valid source citation."
+NO_TALKING_POINTS = "No sourced talking points could be generated for this briefing."
+
+
+def test_uncited_item_dropped_and_counted():  # scenario 3
+    out, _ = _run(
+        _state(), _output(talking_points=["Uncited claim", f"Ok [Source: {URL_C}]"])
+    )
+    assert out["briefing_content"]["talking_points"]["talking_points"] == [
+        f"Ok [Source: {URL_C}]"
+    ]
+    assert DROPPED.format(n=1) in out["warnings"]
+
+
+def test_fabricated_url_dropped():  # scenario 4
+    bad = "Claim [Source: https://evil.example]"
+    out, _ = _run(_state(), _output(potential_gaps=[bad]))
+    assert out["briefing_content"]["role_insights"]["potential_gaps"] == []
+    assert DROPPED.format(n=1) in out["warnings"]
+
+
+def test_interviewer_url_is_valid_source():
+    out, _ = _run(_state(), _output(talking_points=[f"Blog [Source: {URL_I}]"]))
+    assert out["briefing_content"]["talking_points"]["talking_points"]
+    assert out["warnings"] == []
+
+
+def test_invalid_resume_section_dropped_valid_case_insensitive():  # scenario 5
+    out, _ = _run(
+        _state(),
+        _output(
+            resume_alignment=[
+                "Won award [Resume: Awards]",
+                "Built APIs [Resume: experience]",
+            ]
+        ),
+    )
+    assert out["briefing_content"]["role_insights"]["resume_alignment"] == [
+        "Built APIs [Resume: experience]"
+    ]
+    assert DROPPED.format(n=1) in out["warnings"]
+
+
+def test_mixed_valid_and_invalid_tags_dropped():  # scenario 6
+    mixed = f"Claim [Source: {URL_C}] [Resume: Awards]"
+    out, _ = _run(_state(), _output(stories_to_prepare=[mixed]))
+    assert out["briefing_content"]["talking_points"]["stories_to_prepare"] == []
+    assert DROPPED.format(n=1) in out["warnings"]
+
+
+def test_multiple_valid_tags_kept():
+    item = f"Claim [Source: {URL_C}] [Resume: Experience]"
+    out, _ = _run(_state(), _output(stories_to_prepare=[item]))
+    assert out["briefing_content"]["talking_points"]["stories_to_prepare"] == [item]
+
+
+def test_suggested_questions_exempt_blank_removed():  # scenario 7
+    out, _ = _run(_state(), _output(suggested_questions=["Q one?", "  ", "Q two?"]))
+    assert out["briefing_content"]["talking_points"]["suggested_questions"] == [
+        "Q one?",
+        "Q two?",
+    ]
+    assert out["warnings"] == []
+
+
+def test_all_talking_points_invalid_warns_without_raising():  # scenario 8
+    out, _ = _run(_state(), _output(talking_points=["a", "b"]))
+    assert out["briefing_content"]["talking_points"]["talking_points"] == []
+    assert DROPPED.format(n=2) in out["warnings"]
+    assert NO_TALKING_POINTS in out["warnings"]
+
+
+def test_empty_llm_talking_points_also_warns():
+    out, _ = _run(_state(), _output(talking_points=[]))
+    assert NO_TALKING_POINTS in out["warnings"]
+    assert not any("Removed" in w for w in out["warnings"])
+
+
+def test_no_resume_resume_citations_dropped_no_extra_warning():  # scenario 10
+    state = _state(retrieved_context={"resume_chunks": [], "briefing_chunks": []})
+    output = _output(
+        talking_points=[f"Web fact [Source: {URL_C}]"],
+        resume_alignment=[],
+        stories_to_prepare=[],
+        key_requirements=[f"Req [Source: {URL_C}]"],
+        potential_gaps=[],
+        shared_interests=[],
+        conversation_starters=[],
+    )
+    out, generate = _run(state, output)
+    assert generate.call_count == 1
+    assert out["warnings"] == []
+
+    out, _ = _run(state, _output())  # default output has resume cites
+    assert any("Removed" in w for w in out["warnings"])
+    assert out["briefing_content"]["role_insights"]["resume_alignment"] == []
+
+
+def test_interviewer_enrichment_validated():
+    out, _ = _run(
+        _state(),
+        _output(
+            shared_interests=["uncited"],
+            conversation_starters=[f"Ask [Source: {URL_I}]"],
+        ),
+    )
+    profile = out["briefing_content"]["interviewer_profile"]
+    assert profile["shared_interests"] == []
+    assert profile["conversation_starters"] == [f"Ask [Source: {URL_I}]"]
+
+
+def test_interviewer_enrichment_ignored_when_profile_empty():  # scenario 9
+    out, _ = _run(_state(interviewer_research={}), _output())
+    profile = out["briefing_content"]["interviewer_profile"]
+    assert profile["shared_interests"] == []
+    assert profile["conversation_starters"] == []
+    assert not any("Removed" in w for w in out["warnings"])
+
+
+def test_no_context_skip_does_not_double_warn():
+    out, _ = _run({"company": COMPANY})
+    assert out["warnings"] == [
+        "Not enough research context to generate role insights or talking points."
+    ]

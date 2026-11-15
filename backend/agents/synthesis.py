@@ -9,6 +9,7 @@ enforced in code (section 6, guardrails 1 and 3).
 """
 
 import os
+import re
 from typing import Any
 
 from langchain_anthropic import ChatAnthropic
@@ -136,6 +137,55 @@ def _generate(
     )
 
 
+EMPTY_TALKING_POINTS_WARNING = (
+    "No sourced talking points could be generated for this briefing."
+)
+_SOURCE_TAG = re.compile(r"\[Source:\s*([^\]]+?)\s*\]")
+_RESUME_TAG = re.compile(r"\[Resume:\s*([^\]]+?)\s*\]")
+# Claims need a citation; suggested_questions are questions to ask, so they do not.
+_CITED_FIELDS = (
+    "key_requirements",
+    "resume_alignment",
+    "potential_gaps",
+    "talking_points",
+    "stories_to_prepare",
+    "shared_interests",
+    "conversation_starters",
+)
+
+
+def dropped_warning(count: int) -> str:
+    return f"Removed {count} generated items that lacked a valid source citation."
+
+
+def _is_cited(item: str, urls: set[str], sections: set[str]) -> bool:
+    """True if the item has at least one citation tag and every tag is valid."""
+    sources = _SOURCE_TAG.findall(item)
+    resumes = _RESUME_TAG.findall(item)
+    if not sources and not resumes:
+        return False
+    return all(u in urls for u in sources) and all(
+        r.lower() in sections for r in resumes
+    )
+
+
+def _validate(
+    output: SynthesisOutput, urls: set[str], sections: set[str]
+) -> tuple[SynthesisOutput, int]:
+    """Drop uncited or wrongly cited items (ADR section 6, guardrail 3)."""
+    cleaned = output.model_copy(deep=True)
+    dropped = 0
+    for field in _CITED_FIELDS:
+        items = getattr(output, field)
+        kept = [i for i in items if _is_cited(i, urls, sections)]
+        dropped += len(items) - len(kept)
+        setattr(cleaned, field, kept)
+    cleaned.suggested_questions = [
+        q.strip() for q in output.suggested_questions if q.strip()
+    ]
+    return cleaned, dropped
+
+
 def _has_company_facts(c: CompanyOverview) -> bool:
     return bool(c.summary or c.recent_news or c.tech_stack or c.culture_notes)
 
@@ -178,6 +228,7 @@ def synthesis_node(state: dict[str, Any]) -> dict[str, Any]:
         or bool(context.resume_chunks)
     )
 
+    allowed_urls = _dedupe(company_research.sources + interviewer.sources)
     if has_context:
         generated = _generate(
             company=company,
@@ -188,6 +239,20 @@ def synthesis_node(state: dict[str, Any]) -> dict[str, Any]:
             briefing_chunks=context.briefing_chunks,
             include_interviewer=include_interviewer,
         )
+        if not include_interviewer:
+            # Discard rather than validate: these were never requested, so they
+            # must not show up as "dropped" claims.
+            generated.shared_interests = []
+            generated.conversation_starters = []
+        generated, dropped = _validate(
+            generated,
+            set(allowed_urls),
+            {c.section.lower() for c in context.resume_chunks},
+        )
+        if dropped:
+            warnings.append(dropped_warning(dropped))
+        if not generated.talking_points:
+            warnings.append(EMPTY_TALKING_POINTS_WARNING)
     else:
         generated = SynthesisOutput()
         warnings.append(NO_CONTEXT_WARNING)
@@ -204,7 +269,7 @@ def synthesis_node(state: dict[str, Any]) -> dict[str, Any]:
             resume_alignment=generated.resume_alignment,
             potential_gaps=generated.potential_gaps,
             # Sources are set in code so the model cannot cite a URL it was not given.
-            sources=_dedupe(company_research.sources + interviewer.sources),
+            sources=allowed_urls,
         ),
         talking_points=TalkingPoints(
             talking_points=generated.talking_points,

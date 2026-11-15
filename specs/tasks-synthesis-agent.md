@@ -15,9 +15,9 @@ Spec: `specs/synthesis-agent.md`
 - [ ] Run /review
 
 ### Slice 3: Citation validation + warnings
-- [ ] Write failing tests (scenarios 3, 4, 5, 6, 7, 8, 10)
-- [ ] Implement citation parsing/validation, item dropping, dropped-items and empty-talking-points warnings
-- [ ] Update CLAUDE.md Current State / Next Task
+- [x] Write failing tests (scenarios 3, 4, 5, 6, 7, 8, 10)
+- [x] Implement citation parsing/validation, item dropping, dropped-items and empty-talking-points warnings
+- [x] Update CLAUDE.md Current State / Next Task
 - [ ] Run /review
 
 ## Done checklist

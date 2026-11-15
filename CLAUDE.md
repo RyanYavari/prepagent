@@ -37,11 +37,15 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - `agents/interviewer.py`: `interviewer_research_node(state)` — skips (empty profile, no warning) when no interviewer; query ladder (max 3), drops results that don't mention the interviewer's full name, retry when <2 relevant, low-result warning when <3, wrong-person warning when no result mentions the company, Claude structured-output summary into `InterviewerProfile` (summary/background only), `sources` set from result URLs in code (not wired into a graph yet)
 - Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model overridable via `INTERVIEWER_AGENT_MODEL`
 
+### ✅ Complete (Week 2, Synthesis) — specs/synthesis-agent.md
+- `agents/synthesis.py`: `synthesis_node(state)` — passes company overview and interviewer summary/background through, generates role insights, talking points and interviewer enrichment in one Claude structured-output call (source-attribution prompt per ADR §6 guardrail 1), then validates citations in code (guardrail 3): items need `[Source: <url>]` (url from company/interviewer sources) or `[Resume: <Section>]` (section from retrieved resume chunks), otherwise dropped with a count warning; empty talking points warn; no usable context skips the LLM; `role_insights.sources` set in code (not wired into a graph yet)
+- Needs `ANTHROPIC_API_KEY`; model overridable via `SYNTHESIS_AGENT_MODEL`
+
 ### ⚠️ Partial
 - **Pipeline trigger**: POST /briefings creates DB record + embeds resume, but no LangGraph pipeline execution yet
 
 ### ❌ Not Started (Week 2+)
-- **Agent nodes**: synthesis.py is empty (supervisor.py stays empty: fixed DAG, no supervisor)
+- **supervisor.py** stays empty: fixed DAG, no supervisor
 - **Briefing chunk writer**: post-synthesis embedding of briefing sections (retrieval already reads them)
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
 - **LangGraph pipeline**: No StateGraph orchestration, no background task execution
@@ -49,7 +53,7 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - **RAGAS evaluation**: Not implemented
 
 ### Next Task
-**Week 2: Synthesis agent** (4-section briefing from company + interviewer + RAG output; source-attribution prompt per ADR §6 guardrail 1) or **LangGraph wiring** of the three existing nodes — spec it first with /spec
+**Week 2: LangGraph wiring** of the four nodes (company + interviewer in parallel → RAG → synthesis), then pipeline trigger from POST /briefings and persisting `briefing_content` — spec it first with /spec
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet
