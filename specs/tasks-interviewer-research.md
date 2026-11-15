@@ -5,8 +5,8 @@ Spec: `specs/interviewer-research.md`
 ## Slice plan
 
 ### Slice 1: Skip, validation, query ladder, relevance filter, retry loop
-- [ ] Write failing tests in `backend/tests/test_interviewer_node.py` (scenarios 1, 2, 3, 5, 6, 8, 9, 10, 12, 14; search and `_summarize` mocked)
-- [ ] Implement skip/validation, query ladder, name-relevance filter, URL de-dup, retry loop in `backend/agents/interviewer.py`
+- [x] Write failing tests in `backend/tests/test_interviewer_node.py` (scenarios 1, 2, 3, 5, 6, 8, 9, 10, 12, 14; search and `_summarize` mocked)
+- [x] Implement skip/validation, query ladder, name-relevance filter, URL de-dup, retry loop in `backend/agents/interviewer.py`
 - [ ] Run /review
 
 ### Slice 2: Warnings (low-result + wrong-person)

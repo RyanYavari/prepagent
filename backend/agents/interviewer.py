@@ -1,0 +1,78 @@
+"""
+Interviewer Research agent node.
+
+Fixed-DAG step that runs in parallel with company research
+(ARCHITECTURE_DECISIONS.md section 1). Retry on thin search results is a local,
+deterministic loop inside this node, not a supervisor decision. Results that do
+not mention the interviewer by name are dropped so a common name cannot pull in
+a different person (section 6, failure mode 3).
+"""
+
+from typing import Any
+
+from models.briefing import InterviewerProfile
+from models.research import SearchResult
+from services.web_search import search_web
+
+MAX_ATTEMPTS = 3
+RETRY_THRESHOLD = 2  # retry while fewer than this many relevant results (ADR section 1)
+
+
+def _build_queries(interviewer: str, company: str, role: str | None) -> list[str]:
+    base = f'"{interviewer}" {company}'
+    with_role = " ".join(part for part in (base, role, "linkedin") if part)
+    return [base, with_role, f"{base} blog talk interview podcast"]
+
+
+def _mentions(result: SearchResult, text: str) -> bool:
+    return text.lower() in f"{result.title} {result.content}".lower()
+
+
+def _summarize(
+    interviewer: str,
+    company: str,
+    role: str | None,
+    results: list[SearchResult],
+) -> InterviewerProfile:
+    raise NotImplementedError  # slice 3
+
+
+def interviewer_research_node(state: dict[str, Any]) -> dict[str, Any]:
+    """
+    Research the interviewer via Tavily and summarize into an InterviewerProfile.
+
+    State in:  interviewer (optional), company, optional role, optional warnings
+    State out: interviewer_research (InterviewerProfile as dict), warnings
+
+    Raises:
+        ValueError: interviewer given but company missing/blank
+        Exception: Tavily/LLM failures propagate
+    """
+    warnings = list(state.get("warnings") or [])
+    interviewer = str(state.get("interviewer") or "").strip()
+    if not interviewer:
+        return {
+            "interviewer_research": InterviewerProfile().model_dump(),
+            "warnings": warnings,
+        }
+
+    company = str(state.get("company") or "").strip()
+    if not company:
+        raise ValueError("interviewer_research_node requires a company in state")
+    role = str(state.get("role") or "").strip() or None
+
+    collected: dict[str, SearchResult] = {}
+    for query in _build_queries(interviewer, company, role)[:MAX_ATTEMPTS]:
+        for result in search_web(query):
+            if _mentions(result, interviewer):
+                collected.setdefault(result.url, result)
+        if len(collected) >= RETRY_THRESHOLD:
+            break
+
+    results = list(collected.values())
+    profile = (
+        _summarize(interviewer, company, role, results)
+        if results
+        else InterviewerProfile()
+    )
+    return {"interviewer_research": profile.model_dump(), "warnings": warnings}
