@@ -65,6 +65,10 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - ADR 7 + §4 amendment in ARCHITECTURE_DECISIONS.md; /why entries in docs/decisions.md
 - **Frontend (CalendarPanel, /calendar/callback) was never run in a browser**: lint, tsc, build and vitest pass, but the connect round-trip, sync, confirm, dismiss and revoked states are unverified
 
+### ✅ Complete (Sign-in tokens) — specs/signin-token-removal.md
+- `/auth/callback` stores no Google token (insert is `{email}` only); sign-in uses `access_type=online`, `exchange_code_for_tokens` returns `email`/`name` only; tokens never logged
+- `backend/scripts/revoke_stored_tokens.py` (`python -m scripts.revoke_stored_tokens` from backend/) revokes stored tokens at Google best effort and nulls the columns; migration `005_drop_signin_tokens.sql` then drops them (guarded: fails while any token remains). **Order: deploy code, run script, apply 005**
+
 ### ❌ Not Started (Week 2+)
 - **supervisor.py** stays empty: fixed DAG, no supervisor
 - **Briefing chunk writer**: post-synthesis embedding of briefing sections (retrieval already reads them)
@@ -74,7 +78,7 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 
 ### Next Task
 1. Apply migration 004, set `TOKEN_ENCRYPTION_KEY`, configure Google Cloud, then **manually verify the calendar flow and the briefing viewer in a browser**
-2. **Follow-up spec (high priority): sign-in tokens.** `users.google_access_token` / `google_refresh_token` are stored in plaintext by `/auth/callback`; stop storing or encrypt them, and revoke old grants (gmail/drive/calendar granted before the scope trim)
+2. Run the sign-in token revoke script, then apply migration 005
 3. Briefing chunk writer — spec it first with /spec
 
 ## Stack
@@ -137,6 +141,6 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 
 ## Non-obvious gotchas
 - All agents get their LLM from `agents/llm.py` (`structured_llm`): `AGENT_MODEL` env var (default `claude-sonnet-5-5`), `method="json_schema"` for structured output, and no `temperature` (the model returns 400 for forced `tool_choice` and for `temperature`)
-- Google OAuth tokens stored in Supabase users table, not in session
+- Sign-in stores no Google tokens; only the encrypted calendar refresh token is stored (`calendar_connections`)
 - pgvector chosen over Pinecone (corpus is too small for dedicated vector service)
 - Frontend auth state lives in localStorage (session JWT)

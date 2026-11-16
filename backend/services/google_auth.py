@@ -81,9 +81,9 @@ def build_authorization_url() -> tuple[str, str]:
     )
     state = secrets.token_urlsafe(32)
     authorization_url, _ = flow.authorization_url(
-        access_type="offline",
+        # The library defaults to offline; sign-in must not mint a refresh token.
+        access_type="online",
         include_granted_scopes="false",
-        prompt="consent",
         state=state,
     )
     _store_code_verifier(state, flow.code_verifier)
@@ -96,7 +96,8 @@ async def exchange_code_for_tokens(code: str, state: str) -> dict:
     Raises InvalidOAuthStateError if `state` was not issued by us, expired, or
     was already used.
 
-    Returns dict with access_token, refresh_token, email, and name.
+    Returns dict with email and name only. The Google tokens are used in memory
+    for the userinfo call and then discarded (specs/signin-token-removal.md).
     """
     code_verifier = pop_code_verifier(state)
     flow = Flow.from_client_config(
@@ -118,28 +119,9 @@ async def exchange_code_for_tokens(code: str, state: str) -> dict:
         user_info = response.json()
 
     return {
-        "access_token": credentials.token,
-        "refresh_token": credentials.refresh_token,
         "email": user_info["email"],
         "name": user_info.get("name", ""),
     }
-
-
-async def refresh_access_token(refresh_token_value: str) -> str | None:
-    """Use a refresh token to get a new access token. Returns None on failure."""
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
-                "refresh_token": refresh_token_value,
-                "grant_type": "refresh_token",
-            },
-        )
-        if response.status_code == 200:
-            return response.json().get("access_token")
-        return None
 
 
 # --- Calendar connect flow (incremental, separate from sign-in) ---

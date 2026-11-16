@@ -78,6 +78,10 @@ class _Query:
     def order(self, *a, **k):
         return self
 
+    def range(self, start, end):
+        self.opts["range"] = (start, end)
+        return self
+
     def _match(self, row):
         for kind, col, val in self.filters:
             if kind == "eq" and row.get(col) != val:
@@ -89,7 +93,11 @@ class _Query:
     def execute(self):
         rows = self.db.tables.setdefault(self.name, [])
         if self.op == "select":
-            return _Result([dict(r) for r in rows if self._match(r)])
+            hit = [dict(r) for r in rows if self._match(r)]
+            if "range" in self.opts:
+                start, end = self.opts["range"]
+                hit = hit[start : end + 1]
+            return _Result(hit)
         if self.op == "delete":
             gone = [r for r in rows if self._match(r)]
             self.db.tables[self.name] = [r for r in rows if r not in gone]
