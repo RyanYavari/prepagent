@@ -10,9 +10,6 @@ SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/calendar.readonly",
-    "https://www.googleapis.com/auth/drive.file",
 ]
 
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
@@ -79,7 +76,7 @@ def build_authorization_url() -> tuple[str, str]:
     state = secrets.token_urlsafe(32)
     authorization_url, _ = flow.authorization_url(
         access_type="offline",
-        include_granted_scopes="true",
+        include_granted_scopes="false",
         prompt="consent",
         state=state,
     )
