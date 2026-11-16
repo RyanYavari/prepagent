@@ -38,6 +38,7 @@ psql "$SUPABASE_DATABASE_URL" -f supabase/migrations/002_resume_embeddings.sql
 - `004_calendar_integration.sql` - Adds `calendar_connections` (encrypted Calendar refresh token) and `calendar_detections` (unique per user + event, for dedupe); RLS on, server-only
 
 - `005_drop_signin_tokens.sql` - Drops `users.google_access_token` / `google_refresh_token`. **Order matters:** deploy the backend that no longer stores tokens, run `python -m scripts.revoke_stored_tokens` from `backend/` (revokes at Google, nulls the columns), then apply 005. It raises if any token remains. Old values may persist in Supabase backups until they expire.
+- `006_briefing_chunk_link.sql` - Adds `resume_embeddings.briefing_id` (FK to `briefings`, cascade delete) so the briefing chunk writer can replace a briefing's chunks idempotently
 
 ## Verifying Migration
 

@@ -69,9 +69,13 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - `/auth/callback` stores no Google token (insert is `{email}` only); sign-in uses `access_type=online`, `exchange_code_for_tokens` returns `email`/`name` only; tokens never logged
 - `backend/scripts/revoke_stored_tokens.py` (`python -m scripts.revoke_stored_tokens` from backend/) revokes stored tokens at Google best effort and nulls the columns; migration `005_drop_signin_tokens.sql` then drops them (guarded: fails while any token remains). **Order: deploy code, run script, apply 005**
 
+### ✅ Complete (Week 3, Briefing chunk writer) — specs/briefing-chunk-writer.md
+- `services/briefing_chunks.py`: `write_briefing_chunks` renders the 4 briefing sections (not `warnings`, empty ones skipped) to text, embeds them, and replaces the briefing's `doc_type='briefing'` rows in `resume_embeddings` (company/role/`briefing_id`), so retrieval now returns same-company prior briefings
+- `run_pipeline` calls it after the row is `complete`; any failure is logged and swallowed (briefing stays `complete`)
+- Migration `006_briefing_chunk_link.sql` (`briefing_id` FK, cascade) — **must be applied to Supabase**. No backfill of earlier briefings. Not run against real OpenAI/Supabase yet (mocked tests only)
+
 ### ❌ Not Started (Week 2+)
 - **supervisor.py** stays empty: fixed DAG, no supervisor
-- **Briefing chunk writer**: post-synthesis embedding of briefing sections (retrieval already reads them)
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
 - **RAGAS evaluation**: Not implemented
 - Failure reason is not persisted (only `failed` status); a crash mid-run leaves the row `running`
@@ -79,7 +83,8 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 ### Next Task
 1. **Manually verify the briefing viewer in a browser** (the calendar flow is already verified)
 2. Run the sign-in token revoke script, then apply migration 005
-3. Briefing chunk writer — spec it first with /spec
+3. Apply migration 006, then smoke-test the chunk writer with real keys (run two briefings for one company)
+4. Next feature: spec it first with /spec (RAGAS evaluation per ADR §5 is the largest open item)
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet

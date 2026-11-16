@@ -17,6 +17,7 @@ from agents.rag import rag_retrieval_node
 from agents.state import PipelineState
 from agents.synthesis import synthesis_node
 from models.briefing import BriefingSections, BriefingStatus
+from services.briefing_chunks import write_briefing_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,20 @@ def _update_briefing(supabase, briefing_id: str, user_id: str, fields: dict) -> 
         .eq("user_id", user_id)
         .execute()
     )
+
+
+def _write_chunks(
+    briefing_id: str,
+    user_id: str,
+    company: str,
+    role: str | None,
+    content: dict,
+) -> None:
+    """Embed the completed briefing for later retrieval; never affects its status."""
+    try:
+        write_briefing_chunks(user_id, briefing_id, company, role, content)
+    except Exception:
+        logger.exception("Could not write briefing chunks for briefing %s", briefing_id)
 
 
 def build_graph():
@@ -98,6 +113,7 @@ def run_pipeline(
             user_id,
             {"status": BriefingStatus.complete.value, "content": content},
         )
+        _write_chunks(briefing_id, user_id, company, role, content)
     except Exception:
         logger.exception("Briefing pipeline failed for briefing %s", briefing_id)
         try:
