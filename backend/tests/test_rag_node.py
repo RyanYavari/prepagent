@@ -76,3 +76,22 @@ def test_db_error_propagates():
         pytest.raises(RuntimeError, match="down"),
     ):
         rag_retrieval_node({"user_id": "u", "company": "Stripe"})
+
+
+def test_logs_counts_only_never_chunk_content(caplog):
+    result = RetrievalResult(
+        resume_chunks=[_chunk(content="SECRET-RESUME-TEXT"), _chunk(content="r2")],
+        briefing_chunks=[_chunk("briefing", "SECRET-BRIEFING-TEXT")],
+    )
+    with caplog.at_level("INFO", logger="agents.rag"):
+        _run(
+            {"user_id": "u-1", "company": "Edlore", "briefing_id": "b-9"},
+            result,
+        )
+
+    assert "briefing_id=b-9" in caplog.text
+    assert "company=Edlore" in caplog.text
+    assert "resume_chunks=2" in caplog.text
+    assert "briefing_chunks=1" in caplog.text
+    assert "SECRET-RESUME-TEXT" not in caplog.text
+    assert "SECRET-BRIEFING-TEXT" not in caplog.text

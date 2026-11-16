@@ -6,9 +6,12 @@ Fixed-DAG step that runs after company/interviewer research and before synthesis
 takes the state dict and returns a partial state update.
 """
 
+import logging
 from typing import Any
 
 from services.retrieval import retrieve_user_context
+
+logger = logging.getLogger(__name__)
 
 NO_RESUME_WARNING = (
     "No resume on file; talking points will not reference your background."
@@ -35,6 +38,15 @@ def rag_retrieval_node(state: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("rag_retrieval_node requires a company in state")
 
     result = retrieve_user_context(user_id, company)
+
+    # Counts only: never log chunk content or resume text.
+    logger.info(
+        "RAG retrieval: briefing_id=%s company=%s resume_chunks=%d briefing_chunks=%d",
+        state.get("briefing_id"),
+        company,
+        len(result.resume_chunks),
+        len(result.briefing_chunks),
+    )
 
     warnings = list(state.get("warnings") or [])
     if not result.resume_chunks:

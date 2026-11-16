@@ -172,6 +172,7 @@ def test_run_pipeline_success_lifecycle():
     state = graph.invoke.call_args.args[0]
     assert state["user_id"] == "user-1"
     assert state["company"] == "Stripe"
+    assert state["briefing_id"] == "b-1"
     assert state["warnings"] == []
     assert graph.invoke.call_args.kwargs["config"]["metadata"] == {"briefing_id": "b-1"}
 

@@ -92,6 +92,7 @@ def run_pipeline(
         final = build_graph().invoke(
             {
                 "user_id": user_id,
+                "briefing_id": briefing_id,
                 "company": company,
                 "interviewer": interviewer,
                 "role": role,
