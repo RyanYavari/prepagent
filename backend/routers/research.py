@@ -1,5 +1,6 @@
 import logging
 import os
+from functools import partial
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -16,6 +17,7 @@ from models.briefing import (
     BriefingSections,
     BriefingStatus,
 )
+from services.briefings import create_pending_briefing
 from services.embeddings import process_resume_embedding
 
 logger = logging.getLogger(__name__)
@@ -38,15 +40,6 @@ async def create_briefing(
 ):
     """Create a briefing request (status 'pending') and run the pipeline in the background."""
     supabase = _get_supabase()
-
-    row = {
-        "user_id": user.user_id,
-        "company": body.company,
-        "interviewer": body.interviewer,
-        "role": body.role,
-        "interview_date": body.interview_date,
-        "status": BriefingStatus.pending.value,
-    }
 
     # If resume_text is provided, store it and create embeddings for RAG
     if body.resume_text:
@@ -81,24 +74,18 @@ async def create_briefing(
             )
 
     try:
-        result = supabase.table("briefings").insert(row).execute()
+        briefing = create_pending_briefing(
+            supabase,
+            user.user_id,
+            body,
+            partial(background_tasks.add_task, run_pipeline),
+        )
     except Exception:
         logger.exception("Failed to create briefing")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create briefing",
         )
-
-    briefing = result.data[0]
-
-    background_tasks.add_task(
-        run_pipeline,
-        briefing_id=briefing["id"],
-        user_id=user.user_id,
-        company=briefing["company"],
-        interviewer=briefing.get("interviewer"),
-        role=briefing.get("role"),
-    )
 
     return BriefingResponse(
         id=briefing["id"],

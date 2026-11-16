@@ -172,6 +172,15 @@ Measure precision and recall on the classification task. Target: >90% recall (do
 
 Email detection uses two stages: a lightweight pre-filter checks for calendar attachments, scheduling keywords, and known recruiter platform domains, avoiding an LLM call on every incoming email. Emails that pass the pre-filter go to Claude for structured extraction of company, interviewer, and date. The critical design choice is that a detected email never auto-triggers a briefing run. The user always sees the extracted fields and confirms before the pipeline executes. This makes both false positives and extraction errors cheap to recover from. The pre-filter biases toward recall (>90% target) because missing a real invite is more costly than surfacing a dismissible false positive.
 
+### Amendment (2026-11-15): calendar-sourced detection
+
+Calendar events (specs/calendar-detection.md) differ from the email case above in two ways, so two positions in this section are relaxed for that source only:
+
+- **Trigger:** polling instead of push. `gmail.watch` needs a public HTTPS endpoint and channel renewal; for a local-first MVP the calendar is read on demand (and optionally on an interval). The production path is `events.watch` channels calling the same idempotent sync function.
+- **"Never auto-run":** calendar events are structured data (attendees, times, organizer), so extraction is more reliable than email prose. Auto-run is therefore *allowed*, but only when explicitly enabled (`CALENDAR_AUTO_CONFIDENCE_THRESHOLD` set at or below 1; the default disables it so every detection needs confirmation) and only when confidence, grounding (company appears in the event text), accepted-RSVP and per-sync-cap checks all pass. The original guardrail still applies to everything else, including any future Gmail source.
+
+See section 7 for the architecture of the calendar layer.
+
 ---
 
 ## 5. Eval Design
@@ -286,6 +295,37 @@ Before running company research, do a quick check: "Given the company name '[X]'
 ### Summary
 
 The most likely failure mode is hallucinated talking points: the synthesis agent invents connections between the user's resume and the target company that the research doesn't support. The cheapest guardrail is source attribution in the synthesis prompt -- every claim must cite either a URL from the research or a specific resume section. This doesn't prevent hallucination, but it makes hallucination immediately detectable by the user; an unsourced claim is a visible red flag. The second guardrail is low-result warnings: if Tavily returns fewer than 3 results for the company or interviewer, the section explicitly states that limited public data is available. Both guardrails are essentially free to implement -- one is a prompt change, the other is a conditional check -- and they address the two highest-risk failure modes.
+
+
+---
+
+## 7. Calendar Trigger Layer: Classifier Gate in Front of the Fixed DAG
+
+### The question
+
+Calendar events should become briefings without manual entry. That requires deciding, per event, whether it is an interview, and acting on the answer. Does that make the system a supervisor architecture?
+
+### What is different from section 1
+
+Section 1's test for a supervisor was "is there a branching decision that needs LLM judgment?" For the research pipeline the answer was no. Here it is yes: *ignore / ask the user / create a briefing* depends on judging free text. So this layer is a router, but a narrow one.
+
+### Decision
+
+- Per event: one structured-output LLM call extracts `{is_interview, confidence, company, role, interviewer_names}` into a strict schema (no tools bound, unknown fields rejected). Then plain code (`decide()`) chooses the action. **The LLM supplies field values; it never selects the action.**
+- Not a supervisor: it does not choose agents, loop, retry, or sit between pipeline steps. The research graph from section 1 is unchanged and still a fixed DAG.
+- Not a LangGraph graph: one call plus a pure function does not need `StateGraph`; LangSmith still traces the LLM call.
+- Event text (title, description, attendee names) is attacker-controllable, since anyone can send a calendar invite. Mitigations: schema-only output, no tools, delimited untrusted-data input, field sanitization, a code-side grounding check, auto-run only for accepted invites with a per-sync cap, and the only reachable side effect is the same pending-briefing creation `POST /briefings` performs (shared helper). Downstream agent prompts and `BriefingCreate` were hardened for the same reason.
+- Direct Google Calendar API (httpx), not an MCP server: per-user OAuth tokens in a multi-tenant web app, a single deterministic call, and no tool access for the model that reads untrusted text. This layer is not MCP-based.
+
+### Alternatives rejected
+
+- **Supervisor/agent with calendar tools:** puts tools next to untrusted text and adds nondeterminism for a one-shot classification.
+- **Always auto-run / never auto-run:** the first makes a wrong extraction cost a pipeline run silently; the second ignores that calendar data is reliable enough to skip a click. Default is confirm-everything; auto-run is opt-in by threshold.
+- **LLM-chosen action:** an injected event could pick its own outcome. Code-owned routing keeps the blast radius to "a pending briefing".
+
+### Summary
+
+The calendar layer is a classifier gate in front of an unchanged fixed DAG: the LLM extracts structured fields from untrusted event text, deterministic code decides whether to ignore, ask, or create a briefing, and by default it always asks.
 
 ---
 

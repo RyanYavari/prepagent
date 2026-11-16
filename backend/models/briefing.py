@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from models.text_safety import validate_safe_field
 
 
 class BriefingStatus(str, Enum):
@@ -27,6 +29,11 @@ class BriefingCreate(BaseModel):
         max_length=50_000,
         description="Raw resume text to use for this briefing.",
     )
+
+    @field_validator("company", "interviewer", "role")
+    @classmethod
+    def _safe_text(cls, value: str | None) -> str | None:
+        return validate_safe_field(value)
 
 
 # --- Section models ---
