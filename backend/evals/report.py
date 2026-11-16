@@ -148,6 +148,8 @@ SHORT = {
     "faithfulness_company": "f.comp",
     "faithfulness_interviewer": "f.intv",
     "faithfulness_synthesis": "f.synth",
+    "faithfulness_synthesis_all": "f.s.all",
+    "faithfulness_prescriptive": "f.presc",
     "answer_relevancy": "relev",
     "context_precision": "c.prec",
     "context_recall": "c.recall",

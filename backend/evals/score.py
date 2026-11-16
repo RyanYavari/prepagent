@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from statistics import mean
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from evals.budget import BudgetExceeded, CallBudget
 from evals.collect import CollectedCase
 from evals.samples import (
@@ -43,6 +45,37 @@ THRESHOLDS = {
 }
 
 Scorer = Callable[[Sample], Awaitable[float]]
+
+
+class FactList(BaseModel):
+    facts: list[str] = Field(default_factory=list)
+
+
+EXTRACT_FACTS_PROMPT = """You will be given interview-preparation items: talking points, \
+stories to prepare and conversation starters. Rewrite them as standalone factual \
+statements about the candidate, the company or the interviewer that the items assert \
+or rely on.
+
+Rules:
+- Keep only statements of fact (what the candidate did, what the company does or \
+announced, what the interviewer did).
+- Drop advice and framing: what to say, ask, emphasize or prepare; that something is a \
+talking point, story or question; generic story templates such as "cover the situation, \
+actions and results".
+- Do not add, infer or improve any fact. Use only what the items say.
+- Each statement must be self-contained (name the subject; no pronouns like "it").
+- If an item contains no facts, produce nothing for it.
+
+Items:
+{items}
+"""
+
+
+async def extract_facts(judge: Any, items: str) -> list[str]:
+    """Judge call: reduce prescriptive items to the facts they rely on, so the advice
+    wording is not scored against context that can never contain it."""
+    result = await judge.agenerate(EXTRACT_FACTS_PROMPT.format(items=items), FactList)
+    return [f.strip() for f in result.facts if f and f.strip()]
 
 
 def threshold_for(metric: str) -> float | None:
@@ -129,9 +162,15 @@ def make_ragas_scorer(
 
     async def score(sample: Sample) -> float:
         if sample.metric.startswith("faithfulness"):
+            response = sample.response
+            if sample.extract_facts:
+                facts = await extract_facts(judge, response)
+                if not facts:
+                    return float("nan")  # nothing factual to check: null, not 0
+                response = "\n".join(facts)
             result = await faithfulness.ascore(
                 user_input=sample.user_input,
-                response=sample.response,
+                response=response,
                 retrieved_contexts=sample.contexts,
             )
         elif sample.metric == "answer_relevancy":

@@ -144,3 +144,27 @@ ADR section 5 promised RAGAS scoring but nothing existed. The graph keeps only s
 
 **Revisit when:**
 Retrieval becomes selective (top-k or reranked), or a prior-briefing citation format is introduced.
+
+---
+
+## 2026-11-15 Split synthesis faithfulness into factual and prescriptive (metric v2)
+
+**Status:** Accepted
+
+**Context:**
+Synthesis faithfulness scored 0.64, but about 100 of 122 flagged claims were advice wording ("a talking point is to...", story templates) that no context can contain, plus a handful of genuine stretched inferences and about two overgeneralised facts. The number could not tell a hallucination from a prescriptive sentence.
+
+**Decision:**
+The main synthesis score covers factual fields only (role insights, shared interests). Talking points, stories and conversation starters are scored by first extracting the facts they rely on with a judge call, then checking those facts. The old all-fields score stays as `faithfulness_synthesis_all`, and results record `metric_version: 2`.
+
+**Alternatives considered:**
+- Change the synthesis prompt first: Rejected because the change would be measured against a score that is mostly artifact.
+- Drop prescriptive fields from scoring entirely: Rejected because their cited facts are where ADR section 6's stretched-connection failure shows up.
+- Rewrite items with regexes instead of a judge call: Rejected because advice and fact are interleaved in free text.
+
+**Tradeoffs:**
+- Pro: the headline metric now moves when facts get less supported, not when phrasing changes
+- Con: about 5 extra judge calls per case; the extraction step can itself drop claims, so the prescriptive score is more lenient; v1 and v2 baselines are comparable only through `faithfulness_synthesis_all`
+
+**Revisit when:**
+Synthesis output gains structured citations per item (then check the citation directly instead of extracting facts).

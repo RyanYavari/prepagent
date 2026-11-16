@@ -88,3 +88,36 @@ def test_cli(tmp_path, capsys):
     assert main([str(pa), str(pb)]) == 0
     assert "Delta (B - A)" in capsys.readouterr().out
     assert main([str(pa)]) == 2
+
+
+def test_compare_shows_both_synthesis_variants_and_flags_metric_version():
+    a = run()
+    a["meta"]["config"]["metric_version"] = 1
+    b = copy.deepcopy(a)
+    b["meta"]["config"]["metric_version"] = 2
+    a["cases"][0]["scores"]["faithfulness_synthesis"] = 0.5
+    b["cases"][0]["scores"]["faithfulness_synthesis"] = 0.9
+    b["cases"][0]["scores"]["faithfulness_synthesis_all"] = 0.5
+    out = compare(a, b)
+    assert "config.metric_version: 1 -> 2" in out
+    assert "f.synth" in out and "f.s.all" in out and "f.presc" in out
+    assert "+0.40" in out
+
+
+def test_terminal_table_and_summary_include_new_metrics():
+    from evals.report import format_table
+    from evals.score import aggregate
+
+    scores = {
+        "faithfulness_synthesis": 0.9,
+        "faithfulness_synthesis_all": 0.6,
+        "faithfulness_prescriptive": 0.8,
+    }
+    results = {
+        "meta": {"llm_calls": {"pipeline": 0, "judge": 0, "cap": 1}, "tavily_calls": 0},
+        "cases": [{"id": "a", "scores": scores}],
+        "summary": aggregate([scores]),
+    }
+    table = format_table(results)
+    assert "f.s.all" in table and "f.presc" in table
+    assert results["summary"]["faithfulness_synthesis_all"]["mean"] == 0.6

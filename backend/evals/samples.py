@@ -16,6 +16,12 @@ from models.briefing import BriefingSections
 from models.research import SearchResult
 from models.retrieval import RetrievedChunk
 
+# Metric definitions version. 2 = factual/prescriptive split of synthesis faithfulness
+# (specs/ragas-eval-harness.md, "Metric v2"). Recorded in results meta so `compare`
+# flags a run made under different definitions.
+METRIC_VERSION = 2
+
+# The case-level `faithfulness` mean averages these three factual groups.
 FAITHFULNESS_METRICS = (
     "faithfulness_company",
     "faithfulness_interviewer",
@@ -23,6 +29,8 @@ FAITHFULNESS_METRICS = (
 )
 METRICS = (
     *FAITHFULNESS_METRICS,
+    "faithfulness_synthesis_all",
+    "faithfulness_prescriptive",
     "answer_relevancy",
     "context_precision",
     "context_recall",
@@ -39,6 +47,9 @@ class Sample:
     response: str = ""
     contexts: list[str] = field(default_factory=list)
     reference: str = ""
+    # True: `response` holds prescriptive items; the scorer first extracts only the
+    # factual assertions they rely on, then checks those against `contexts`.
+    extract_facts: bool = False
 
 
 def build_question(role: str | None, company: str, interviewer: str | None) -> str:
@@ -77,16 +88,34 @@ def render_interviewer_facts(s: BriefingSections) -> str:
     return "\n".join(_line("Summary", i.summary) + _line("Background", i.background))
 
 
-def render_synthesis_claims(s: BriefingSections) -> str:
-    r, t, i = s.role_insights, s.talking_points, s.interviewer_profile
+def render_synthesis_facts(s: BriefingSections) -> str:
+    """Factual synthesis fields: role insights and shared interests. These state
+    things about the role, company, candidate or interviewer, so they are checked
+    as written."""
+    r, i = s.role_insights, s.interviewer_profile
     return "\n".join(
         _items("Requirement", r.key_requirements)
         + _items("Alignment", r.resume_alignment)
         + _items("Gap", r.potential_gaps)
-        + _items("Talking point", t.talking_points)
-        + _items("Story", t.stories_to_prepare)
         + _items("Shared interest", i.shared_interests)
+    )
+
+
+def render_prescriptive(s: BriefingSections) -> str:
+    """Prescriptive fields: advice on what to say, ask or prepare. Their wording is
+    never in the context, so only the facts they rely on are scored."""
+    t, i = s.talking_points, s.interviewer_profile
+    return "\n".join(
+        _items("Talking point", t.talking_points)
+        + _items("Story", t.stories_to_prepare)
         + _items("Conversation starter", i.conversation_starters)
+    )
+
+
+def render_synthesis_all(s: BriefingSections) -> str:
+    """Everything synthesis generates, as written (the v1 `faithfulness_synthesis`)."""
+    return "\n".join(
+        part for part in (render_synthesis_facts(s), render_prescriptive(s)) if part
     )
 
 
@@ -95,7 +124,7 @@ def render_full_briefing(s: BriefingSections) -> str:
     parts = [
         render_company(s),
         render_interviewer_facts(s),
-        render_synthesis_claims(s),
+        render_synthesis_all(s),
         "\n".join(_items("Suggested question", s.talking_points.suggested_questions)),
     ]
     return "\n".join(p for p in parts if p)
@@ -132,19 +161,33 @@ def build_samples(col: CollectedCase) -> dict[str, Sample | None]:
             "faithfulness_interviewer", question, interviewer_text, web_i
         )
 
-    synth_text = render_synthesis_claims(s)
     primary = web_c + web_i + resume
-    if synth_text and primary:
+    facts_text = render_synthesis_facts(s)
+    all_text = render_synthesis_all(s)
+    presc_text = render_prescriptive(s)
+    if facts_text and primary:
         out["faithfulness_synthesis"] = Sample(
-            "faithfulness_synthesis", question, synth_text, primary
+            "faithfulness_synthesis", question, facts_text, primary
         )
         if col.prior_chunks:
             prior = [
                 f"({c.company}, {c.section}) {c.content}" for c in col.prior_chunks
             ]
             out[DIAGNOSTIC_WITH_PRIOR] = Sample(
-                DIAGNOSTIC_WITH_PRIOR, question, synth_text, primary + prior
+                DIAGNOSTIC_WITH_PRIOR, question, facts_text, primary + prior
             )
+    if all_text and primary:
+        out["faithfulness_synthesis_all"] = Sample(
+            "faithfulness_synthesis_all", question, all_text, primary
+        )
+    if presc_text and primary:
+        out["faithfulness_prescriptive"] = Sample(
+            "faithfulness_prescriptive",
+            question,
+            presc_text,
+            primary,
+            extract_facts=True,
+        )
 
     full = render_full_briefing(s)
     if full:

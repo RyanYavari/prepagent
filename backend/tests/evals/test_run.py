@@ -81,6 +81,7 @@ def test_results_shape_and_meta(tmp_path):
     }
     assert meta["config"]["judge_model"] != meta["config"]["agent_model"]
     assert meta["dataset_version"] == "v1" and len(meta["dataset_sha256"]) == 64
+    assert meta["config"]["metric_version"] == 2
     assert meta["truncated"] is False and "git" in meta
     case = data["cases"][0]
     assert {"scores", "contexts", "answer", "thresholds_met", "score_errors"} <= set(

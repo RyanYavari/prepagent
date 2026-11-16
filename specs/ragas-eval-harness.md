@@ -230,3 +230,17 @@ Metrics live in `ragas.metrics.collections` (`Faithfulness`, `AnswerRelevancy`, 
 
 ### Calibration from the first real run (2 cases)
 Judge calls were 14-15 per case plus 2 for the prior diagnostic; pipeline 3 per case with an interviewer, 2 without. The 22/case preflight estimate stays as headroom. Judge `max_tokens` is 12000 because faithfulness verdicts list every claim. Not done: a committed scores-only baseline (needs a full `--all` run).
+
+## Metric v2 (2026-11-15): factual vs prescriptive synthesis faithfulness
+**Why.** The first full baseline scored synthesis faithfulness 0.64. A claim-level audit of the judge's verdicts (374 claims, 8 cases) found about 100 of 122 unsupported claims were advice-shaped ("One talking point is to...", "A suggested conversation starter is...", story templates). RAGAS splits answers into statements; for prescriptive items the statement is about the briefing itself, which no context can contain. So the score mostly measured wording, not hallucination.
+
+**Change.**
+- `faithfulness_synthesis` (main synthesis metric) now scores the *factual* fields as written: `role_insights` (requirements, alignment, gaps) and `shared_interests`, against web results + resume chunks.
+- `faithfulness_prescriptive` covers `talking_points`, `stories_to_prepare` and `conversation_starters`. A judge call first rewrites the items into standalone factual statements they rely on (advice, questions, framing and story templates dropped, no new facts added), then those facts are scored against the same contexts. Zero facts gives `null`, not 0.
+- `faithfulness_synthesis_all` is the v1 definition (all synthesis fields as written), kept for continuity and reported beside the others in the table, summary and `compare`.
+- Case-level `faithfulness` (f.mean) averages company, interviewer and synthesis (factual); prescriptive is reported separately. Thresholds apply to every faithfulness metric (0.85).
+- `suggested_questions` stay excluded; the prior-briefing diagnostic now compares against the factual synthesis score.
+- `meta.config.metric_version` is 2 (v1 baseline files have none/1), so `compare` lists it as a difference.
+- Cost: about 5 more judge calls per case (all: 2, prescriptive: 3); preflight estimate is now 27 calls per case.
+
+**Caveats.** The extraction step is itself LLM work and can drop or soften a claim, so `faithfulness_prescriptive` is a less strict measure than the factual score and should be read as "are the facts behind the advice supported". The metric is not a gate and v1 vs v2 numbers are not directly comparable except `faithfulness_synthesis_all`.

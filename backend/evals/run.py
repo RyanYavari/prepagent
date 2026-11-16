@@ -26,6 +26,7 @@ from evals.report import (
     prompt_hashes,
     write_results,
 )
+from evals.samples import METRIC_VERSION
 from evals.score import (
     DEFAULT_EMBEDDING_MODEL,
     CaseScores,
@@ -41,8 +42,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CASES = 3
 DEFAULT_MAX_LLM_CALLS = 150
-# Pipeline 3 + judge ~15 + prior diagnostic 2 + headroom; recalibrate after real runs.
-PER_CASE_LLM_ESTIMATE = 22
+# Pipeline 3 + judge ~15 + synthesis_all 2 + prescriptive 3 + prior diagnostic 2 +
+# headroom; recalibrate after real runs.
+PER_CASE_LLM_ESTIMATE = 27
 PER_CASE_TAVILY_ESTIMATE = 6
 
 
@@ -224,6 +226,7 @@ def _run_once(
             "embedding_model": embedding_model,
             "self_grading": self_grading,
             "ragas_version": version("ragas"),
+            "metric_version": METRIC_VERSION,
             "prompt_hashes": prompt_hashes(),
             "retrieval_mode": "in_memory",
             "web_cache": args.web_cache,

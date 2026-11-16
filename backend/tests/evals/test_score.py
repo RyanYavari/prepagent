@@ -4,7 +4,10 @@ import pytest
 
 from evals.budget import BudgetExceeded, CallBudget
 from evals.score import (
+    EXTRACT_FACTS_PROMPT,
+    FactList,
     aggregate,
+    extract_facts,
     make_judge,
     resolve_judge_model,
     score_case,
@@ -131,3 +134,91 @@ def test_judge_is_accepted_by_ragas_metrics(monkeypatch):
     judge = make_judge("claude-opus-5-5", CallBudget(5))
     Faithfulness(llm=judge)
     ContextRecall(llm=judge)
+
+
+class FakeJudge:
+    def __init__(self, facts):
+        self.facts = facts
+        self.prompts = []
+
+    async def agenerate(self, prompt, response_model):
+        self.prompts.append((prompt, response_model))
+        return FactList(facts=self.facts)
+
+
+def test_extract_facts_prompt_drops_advice_and_returns_clean_facts():
+    import asyncio
+
+    judge = FakeJudge(["  Candidate built X  ", "", "Company did Y"])
+    facts = asyncio.run(extract_facts(judge, "Talking point: say X"))
+    assert facts == ["Candidate built X", "Company did Y"]
+    prompt, model = judge.prompts[0]
+    assert "Talking point: say X" in prompt and model is FactList
+    assert (
+        "Do not add" in EXTRACT_FACTS_PROMPT and "Drop advice" in EXTRACT_FACTS_PROMPT
+    )
+
+
+def test_prescriptive_scorer_extracts_then_scores_facts_only(monkeypatch):
+    """The real scorer must send only extracted facts (not advice wording) to
+    Faithfulness, and return NaN (null) when no facts remain."""
+    import asyncio
+
+    from evals import score as score_mod
+    from evals.samples import Sample
+
+    seen = {}
+
+    class FakeFaith:
+        def __init__(self, llm):
+            pass
+
+        async def ascore(self, user_input, response, retrieved_contexts):
+            seen["response"] = response
+            return type("R", (), {"value": 0.75})()
+
+    judge = FakeJudge(["Candidate built X"])
+    monkeypatch.setattr(score_mod, "make_judge", lambda m, b: judge)
+    monkeypatch.setattr(score_mod, "make_embeddings", lambda m: object())
+    import ragas.metrics.collections as coll
+
+    monkeypatch.setattr(coll, "Faithfulness", FakeFaith)
+    monkeypatch.setattr(coll, "AnswerRelevancy", lambda **k: None)
+    monkeypatch.setattr(coll, "ContextPrecisionWithReference", lambda **k: None)
+    monkeypatch.setattr(coll, "ContextRecall", lambda **k: None)
+    scorer = score_mod.make_ragas_scorer("j", "e", CallBudget(5))
+    sample = Sample(
+        "faithfulness_prescriptive",
+        "q",
+        "Talking point: say X",
+        ["ctx"],
+        extract_facts=True,
+    )
+    assert asyncio.run(scorer(sample)) == 0.75
+    assert seen["response"] == "Candidate built X"
+
+    judge.facts = []
+    import math
+
+    assert math.isnan(asyncio.run(scorer(sample)))
+
+
+def test_case_scores_report_all_synthesis_variants():
+    out = score_case(
+        collected(),
+        fake_scorer(
+            {
+                "faithfulness_synthesis": 0.9,
+                "faithfulness_synthesis_all": 0.6,
+                "faithfulness_prescriptive": 0.8,
+            }
+        ),
+    )
+    assert out.scores["faithfulness_synthesis"] == 0.9
+    assert out.scores["faithfulness_synthesis_all"] == 0.6
+    assert out.scores["faithfulness_prescriptive"] == 0.8
+    # the case-level mean covers the factual groups only
+    assert (
+        "faithfulness_prescriptive"
+        not in __import__("evals.samples", fromlist=["x"]).FAITHFULNESS_METRICS
+    )

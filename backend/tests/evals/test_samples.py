@@ -5,7 +5,9 @@ from evals.samples import (
     build_question,
     build_samples,
     render_full_briefing,
-    render_synthesis_claims,
+    render_prescriptive,
+    render_synthesis_all,
+    render_synthesis_facts,
     strip_citations,
 )
 from models.briefing import BriefingSections
@@ -88,11 +90,61 @@ def test_strip_citations():
     assert strip_citations("Mine [Resume: Experience] end") == "Mine end"
 
 
-def test_synthesis_claims_exclude_questions_warnings_and_tags():
-    text = render_synthesis_claims(sections())
+def test_factual_synthesis_is_role_insights_and_shared_interests_only():
+    sec = sections()
+    sec.interviewer_profile.shared_interests = ["Both like Go [Resume: Skills]"]
+    sec.interviewer_profile.conversation_starters = ["Ask about Go"]
+    text = render_synthesis_facts(sec)
+    assert "Requirement: Go" in text and "Alignment: Built Go services" in text
+    assert "Shared interest: Both like Go" in text
+    assert "Talking point" not in text and "Conversation starter" not in text
     assert "roadmap" not in text and "Limited info" not in text
     assert "[Source" not in text and "[Resume" not in text
+
+
+def test_prescriptive_is_talking_points_stories_starters_only():
+    sec = sections()
+    sec.talking_points.stories_to_prepare = ["Scaling story"]
+    sec.interviewer_profile.conversation_starters = ["Ask about Go"]
+    text = render_prescriptive(sec)
     assert "Talking point: Talk about Go" in text
+    assert (
+        "Story: Scaling story" in text and "Conversation starter: Ask about Go" in text
+    )
+    assert "Requirement" not in text and "roadmap" not in text
+    assert "[Resume" not in text
+
+
+def test_all_is_the_union_in_v1_shape():
+    sec = sections()
+    all_text = render_synthesis_all(sec)
+    assert "Requirement: Go" in all_text and "Talking point: Talk about Go" in all_text
+
+
+def test_metric_version_is_2():
+    from evals.samples import METRIC_VERSION
+
+    assert METRIC_VERSION == 2
+
+
+def test_synthesis_samples_use_factual_all_and_prescriptive_definitions():
+    s = build_samples(collected())
+    facts = s["faithfulness_synthesis"]
+    all_ = s["faithfulness_synthesis_all"]
+    presc = s["faithfulness_prescriptive"]
+    assert "Talking point" not in facts.response and not facts.extract_facts
+    assert "Talking point" in all_.response and not all_.extract_facts
+    assert presc.extract_facts and "Requirement" not in presc.response
+    # all three are scored against the same primary contexts
+    assert facts.contexts == all_.contexts == presc.contexts
+
+
+def test_prescriptive_sample_skipped_when_no_prescriptive_items():
+    sec = sections()
+    sec.talking_points.talking_points = []
+    s = build_samples(collected(sec=sec))
+    assert s["faithfulness_prescriptive"] is None
+    assert s["faithfulness_synthesis"] is not None
 
 
 def test_full_briefing_includes_questions_not_warnings():
