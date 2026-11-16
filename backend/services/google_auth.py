@@ -61,6 +61,10 @@ CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly"
 # this to a shared store (e.g. a Supabase table) so any worker can serve the
 # callback.
 STATE_TTL_SECONDS = 600
+# `/auth/google` is unauthenticated, so the stores are bounded: past this many live
+# entries the oldest is evicted (oldest-first is also soonest-to-expire, since every
+# entry has the same TTL). Real traffic is a handful of sign-ins at a time.
+MAX_PENDING_STATES = 5000
 _pending_verifiers: dict[str, tuple[str, float]] = {}
 _pending_lock = threading.Lock()
 
@@ -74,10 +78,17 @@ def _purge_expired(now: float) -> None:
         del _pending_verifiers[key]
 
 
+def _evict_oldest(store: dict, keep: int) -> None:
+    """Drop oldest entries (dicts keep insertion order) until `keep` remain. Lock held."""
+    while len(store) > keep:
+        del store[next(iter(store))]
+
+
 def _store_code_verifier(state: str, verifier: str) -> None:
     now = time.monotonic()
     with _pending_lock:
         _purge_expired(now)
+        _evict_oldest(_pending_verifiers, MAX_PENDING_STATES - 1)
         _pending_verifiers[state] = (verifier, now + STATE_TTL_SECONDS)
 
 
@@ -209,6 +220,7 @@ def build_calendar_authorization_url(user_id: str) -> tuple[str, str]:
     with _pending_lock:
         for key in [k for k, (_, _, exp) in _pending_calendar.items() if exp <= now]:
             del _pending_calendar[key]
+        _evict_oldest(_pending_calendar, MAX_PENDING_STATES - 1)
         _pending_calendar[state] = (
             flow.code_verifier,
             user_id,

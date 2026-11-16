@@ -20,3 +20,14 @@ def _no_async_retry_backoff():
     reference is replaced; the real asyncio.sleep is untouched."""
     with patch("services.net_config.asyncio", SimpleNamespace(sleep=AsyncMock())):
         yield
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """Every test starts with empty per-IP counters (they live in process memory and
+    all TestClient requests share one client address)."""
+    from services import rate_limit
+
+    rate_limit.reset()
+    yield
+    rate_limit.reset()

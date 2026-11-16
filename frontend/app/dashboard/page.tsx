@@ -4,8 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarPanel } from "@/components/CalendarPanel";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_URL } from "@/lib/api";
 
 type BriefingStatus = "pending" | "running" | "complete" | "failed";
 

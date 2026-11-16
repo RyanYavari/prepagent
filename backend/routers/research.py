@@ -15,8 +15,19 @@ from models.briefing import (
     BriefingSections,
     BriefingStatus,
 )
-from services.briefings import create_pending_briefing, sweep_stale_running
+from routers.limit_errors import briefing_blocked_http
+from services.briefings import (
+    create_pending_briefing,
+    sweep_stale_pending,
+    sweep_stale_running,
+)
 from services.embeddings import process_resume_embedding
+from services.limits import (
+    BriefingBlockedError,
+    check_briefing_allowed,
+    creation_lock,
+)
+from services.log_safety import log_failure
 from services.supabase_client import create_client
 
 logger = logging.getLogger(__name__)
@@ -32,13 +43,40 @@ def _get_supabase():
 
 
 @router.post("", response_model=BriefingResponse, status_code=status.HTTP_201_CREATED)
-async def create_briefing(
+def create_briefing(
     body: BriefingCreate,
     background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ):
     """Create a briefing request (status 'pending') and run the pipeline in the background."""
+    # Handlers run in a thread pool, so the cap check and the insert must be atomic or a
+    # burst of parallel requests would all read the same count and overshoot. One worker
+    # (a deployment requirement) makes a process-wide lock sufficient; it serializes
+    # creates, which is fine at this scale and is also what bounds concurrent spend.
+    with creation_lock:
+        return _create_briefing(body, background_tasks, user)
+
+
+def _create_briefing(
+    body: BriefingCreate,
+    background_tasks: BackgroundTasks,
+    user: CurrentUser,
+):
     supabase = _get_supabase()
+
+    # Kill switch and caps come first: a blocked request must not spend an embedding
+    # call or touch the user's stored resume.
+    try:
+        check_briefing_allowed(supabase, user.user_id)
+    except BriefingBlockedError as exc:
+        raise briefing_blocked_http(exc)
+    except Exception:
+        # Fail closed: if the caps cannot be checked, refuse rather than spend.
+        logger.exception("Briefing limit check failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create briefing",
+        )
 
     # If resume_text is provided, store it and create embeddings for RAG
     if body.resume_text:
@@ -51,22 +89,22 @@ async def create_briefing(
             # Chunk, embed, and store in pgvector
             process_resume_embedding(user.user_id, body.resume_text)
 
-        except OpenAIError:
+        except OpenAIError as exc:
             # OpenAI API failures should be temporary
-            logger.exception("Resume embedding failed (OpenAI)")
+            log_failure(logger, "Resume embedding failed (OpenAI)", exc)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Embedding service temporarily unavailable",
             )
-        except ValueError:
+        except ValueError as exc:
             # Missing API key or invalid input
-            logger.exception("Resume embedding configuration error")
+            log_failure(logger, "Resume embedding configuration error", exc)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Configuration error",
             )
-        except Exception:
-            logger.exception("Failed to save resume")
+        except Exception as exc:
+            log_failure(logger, "Failed to save resume", exc)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to save resume",
@@ -78,9 +116,12 @@ async def create_briefing(
             user.user_id,
             body,
             lambda **kw: background_tasks.add_task(run_pipeline, **kw),
+            check_limits=False,  # already checked above, before the embedding call
         )
-    except Exception:
-        logger.exception("Failed to create briefing")
+    except BriefingBlockedError as exc:
+        raise briefing_blocked_http(exc)
+    except Exception as exc:
+        log_failure(logger, "Failed to create briefing", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create briefing",
@@ -100,7 +141,7 @@ async def create_briefing(
 
 
 @router.get("", response_model=BriefingListResponse)
-async def list_briefings(
+def list_briefings(
     user: CurrentUser = Depends(get_current_user),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -111,6 +152,7 @@ async def list_briefings(
     # Fail runs orphaned on `running` before listing; never let it break the list.
     try:
         sweep_stale_running(supabase, user.user_id)
+        sweep_stale_pending(supabase, user.user_id)
     except Exception:
         logger.exception("Stale briefing sweep failed")
 
@@ -144,7 +186,7 @@ async def list_briefings(
 
 
 @router.get("/{briefing_id}", response_model=BriefingResponse)
-async def get_briefing(
+def get_briefing(
     briefing_id: str,
     user: CurrentUser = Depends(get_current_user),
 ):

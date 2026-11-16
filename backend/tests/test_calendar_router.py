@@ -163,7 +163,8 @@ def test_callback_db_failure_is_generic_and_revokes(client, caplog):
         r = client.post("/calendar/callback", json={"code": "c", "state": "s"})
     assert r.status_code == 500
     assert "db-secret-123" not in r.text
-    assert "db-secret-123" in caplog.text
+    assert "db-secret-123" not in caplog.text  # class only: the row holds the token
+    assert "Failed to store calendar connection" in caplog.text
     revoke.assert_awaited_once()
 
 
@@ -411,7 +412,9 @@ def test_confirm_failure_is_generic_and_releases_detection(client, user_id, capl
     ):
         r = client.post(f"/calendar/detections/{d['id']}/confirm")
     assert r.status_code == 500
-    assert "db-secret-123" not in r.text and "db-secret-123" in caplog.text
+    # The failure is logged by class only (the message can echo the failing row).
+    assert "db-secret-123" not in r.text and "db-secret-123" not in caplog.text
+    assert "RuntimeError" in caplog.text
     assert db.rows("calendar_detections")[0]["status"] == "needs_confirmation"
 
 

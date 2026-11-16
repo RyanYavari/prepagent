@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  blockedMessage,
   buildPayload,
   errorMessage,
   jobDescriptionStatus,
 } from "@/lib/briefingForm";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_URL } from "@/lib/api";
 
 export default function NewBriefing() {
   const router = useRouter();
@@ -74,7 +74,14 @@ export default function NewBriefing() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errorMessage(errData.detail, "Failed to create briefing"));
+        const blocked = blockedMessage(
+          res.status,
+          errData.detail,
+          res.headers.get("Retry-After"),
+        );
+        throw new Error(
+          blocked ?? errorMessage(errData.detail, "Failed to create briefing"),
+        );
       }
 
       const created = await res.json();

@@ -1,6 +1,6 @@
 // Mirrors backend/models/calendar.py. All backend calls send the session JWT;
 // identity is never taken from the request body.
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_URL } from "./api";
 
 export interface CalendarStatus {
   connected: boolean;
@@ -86,6 +86,14 @@ export const dismissDetection = (t: string, id: string) =>
   });
 export const disconnectCalendar = (t: string) =>
   call<CalendarStatus>("/connection", t, { method: "DELETE" });
+
+// The backend answers every /calendar route with this 404 when CALENDAR_ENABLED is off,
+// so the panel should disappear rather than show an error. Other 404s (for example an
+// unknown detection) are ordinary errors.
+export const isCalendarUnavailable = (e: unknown) =>
+  e instanceof CalendarApiError &&
+  e.status === 404 &&
+  e.message === "Calendar is not available";
 
 // 401 means the session JWT is bad (sign out). A 409 from /sync means the
 // calendar connection itself needs reconnecting, which is not a sign-out.

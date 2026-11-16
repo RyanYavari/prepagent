@@ -187,10 +187,22 @@ async def test_prefilter_failures_cost_nothing(db):
 
 async def test_auto_run_cap_per_sync(db, monkeypatch):
     monkeypatch.setenv("CALENDAR_AUTO_CONFIDENCE_THRESHOLD", "0.85")
+    # The per-user briefing caps (services/limits.py) are tested on their own.
+    monkeypatch.setenv("MAX_BRIEFINGS_PER_USER_PER_DAY", "100")
+    monkeypatch.setenv("MAX_ACTIVE_BRIEFINGS_PER_USER", "100")
     with Env([ev(i) for i in range(1, 9)]) as e:
         r = await e.sync(db)
     assert r.briefings_created == 5 and r.needs_confirmation == 3
     assert len(db.rows("briefings")) == 5
+
+
+async def test_auto_run_respects_the_user_briefing_cap(db, monkeypatch):
+    monkeypatch.setenv("CALENDAR_AUTO_CONFIDENCE_THRESHOLD", "0.85")
+    monkeypatch.setenv("MAX_BRIEFINGS_PER_USER_PER_DAY", "2")
+    with Env([ev(i) for i in range(1, 5)]) as e:
+        r = await e.sync(db)
+    assert r.briefings_created == 2 and r.needs_confirmation == 2
+    assert len(db.rows("briefings")) == 2
 
 
 async def test_llm_call_cap_per_sync(db, monkeypatch):
