@@ -32,16 +32,17 @@ A public deployment (Vercel frontend, one small EC2 instance behind HTTPS for th
 ## Decisions
 
 ### 1. Backend runtime: Docker Compose on one EC2 instance, Caddy in front
-Recommended (cheapest reasonable): **one `t4g.small` (2 vCPU ARM, 2 GB), Docker Compose with two services, `api` (uvicorn) and `caddy`**, EBS gp3 20 GB, an Elastic IP, a real domain with an `A` record (e.g. `api.<domain>`). Caddy gets and renews the Let's Encrypt certificate itself (no certbot, no cron), redirects HTTP to HTTPS, and proxies to `api:8000` on the Docker network. The `api` port is not published to the host.
+Chosen (revised 2026-11-16 for the AWS Free plan, see the tailoring note below): **one `t3.micro` (2 vCPU burstable x86_64, 1 GB) in `us-west-2`, Docker Compose with two services, `api` (uvicorn) and `caddy`**, EBS gp3 **10 GB**, a **2 GB swap file**, CPU credits in **standard** mode, an Elastic IP, domain `useprepagent.app` with an `A` record for `api.useprepagent.app`. (The original pick was a `t4g.small`, 2 GB ARM, 20 GB.) Caddy gets and renews the Let's Encrypt certificate itself (no certbot, no cron), redirects HTTP to HTTPS, and proxies to `api:8000` on the Docker network. The `api` port is not published to the host.
 
 | Option | Cost vs the pick | Verdict |
 |---|---|---|
 | Docker + Caddy (pick) | baseline; ~100-150 MB extra RAM for the Docker daemon | Pinned Python 3.12, rollback is "start the previous image tag", config is a file in the repo |
 | systemd + venv + Caddy/nginx | same instance price, a little less RAM | Cheapest by a rounding error, but Amazon Linux's default Python is not 3.12, deploys are `git pull` + `pip install` on the live box, and rollback is manual. Acceptable fallback if memory is tight |
 | nginx instead of Caddy | same | nginx has `limit_req` built in and Caddy's stock build does not; but certificate handling is manual. See the rate-limit decision: limits live in the app, so Caddy wins on simplicity |
-| `t3.micro` (1 GB) | ~$4-5/mo less | Not recommended while eval-only dependencies are in the image (see Open questions Q4); swap pressure during a pipeline run would look like the earlier "hung on running" incident |
+| `t4g.small` (2 GB ARM), the original pick | ~$4.7/mo more | Comfortable memory, but an ARM image (the build runs on the instance, so no cross-build, but Compose plugin and wheels must be aarch64) and it does not fit six months of the $100 credits next to everything else |
+| `t3.micro` (1 GB), **now chosen** | baseline | The earlier objection (eval-only dependencies in the image) is gone: Q4 was done, `requirements-runtime.txt` is the image set. Risks accepted: ~700 MB resident at idle with Docker, Caddy and the SSM agent, so a 2 GB swap file is part of the setup; unlimited-mode CPU credits must be switched to standard; heavy swapping would look like the earlier "hung on running" incident, so the smoke test times one briefing and watches swap. Fallback if it is not enough: `t3.small` (also Free-plan eligible **(confirm)**, about +$7.6/mo) |
 
-Build on the instance (`docker build`, image tagged with the git SHA, previous tag kept). No registry and no CI changes. Build time on 2 vCPUs with the current requirements will be slow; that is the cost of not splitting requirements (Q4).
+Build on the instance (`docker build`, image tagged with the git SHA, previous tag kept). No registry and no CI changes. On a `t3.micro` the first build takes several minutes (burstable CPU, swap in use); the runtime-only requirements keep it far smaller than the full set. Disk is 10 GB: Amazon Linux ~2.5 GB, swap 2 GB, images and build cache ~3 GB, so run `docker builder prune -f` after deploys and watch `df -h /`.
 
 `uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips="*"` (the `*` is safe only because the container port is reachable only from Caddy on the Docker network). No `--reload`. Docker `HEALTHCHECK` hits `GET /health` (static, no Supabase/LLM calls, so health checks cost nothing). An external uptime monitor (free tier) hits `https://api.<domain>/health` every 5 minutes. `restart: unless-stopped`. json-file log driver with `max-size: 10m`, `max-file: 3` (the default has no rotation and will fill the disk).
 
@@ -101,7 +102,7 @@ Recommendation (Q1): **launch in Testing mode with the owner's allowlist.** It i
 - Env var, **Production scope only**: `NEXT_PUBLIC_API_URL=https://api.<domain>` (no trailing slash). `NEXT_PUBLIC_*` values are inlined into the browser bundle at build time: never put a secret in one, and changing it needs a redeploy. Do not set `NEXT_PUBLIC_SUPABASE_*` unless something is found that uses them.
 - Silent localhost fallback: the six `|| "http://localhost:8000"` fallbacks mean a Vercel build with the variable missing ships a site that calls localhost. Fix in scope: one `lib/api.ts` constant that throws at build/start in production when unset, used by all six files.
 - Preview deployments: their `*.vercel.app` URLs are not in CORS and not in Google's redirect URIs, so sign-in cannot work on them. Leave Vercel's Deployment Protection on for previews, or turn previews off. Not supported, by design.
-- Custom domain: `app.<domain>` (or the apex) as the canonical origin; redirect any other hostname (including `*.vercel.app`) to it, because CORS and Google both accept exactly one origin (Q2).
+- Custom domain: the **apex `useprepagent.app`** is the canonical origin (`www.useprepagent.app` redirects to it); redirect any other hostname (including `*.vercel.app`) to it, because CORS and Google both accept exactly one origin (Q2).
 - Security headers via `next.config.ts` `headers()`: `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` (the OAuth `code` is in the callback page URL), `X-Frame-Options: DENY`, and a CSP whose `connect-src` is `'self' https://api.<domain>` (CSP rollout needs a browser pass; Report-Only first).
 - Vercel Hobby is for personal, non-commercial use **(confirm)**; Pro is $20/mo if this stops being a portfolio project.
 
@@ -179,22 +180,30 @@ Live: https://<LIVE_URL_PLACEHOLDER> (frontend on Vercel) · API: https://api.<D
 - Full design, smoke checklist and rollback: [specs/deployment.md](specs/deployment.md); operator steps in `deploy/RUNBOOK.md`.
 ```
 
+## Deployment tailoring (2026-11-16)
+The owner's concrete choices, applied to the runbook (`deploy/RUNBOOK.md`, now written as the Part B checklist with cost and verification per step):
+- Domain `useprepagent.app`; frontend on the **apex** (`FRONTEND_URL=https://useprepagent.app`, Google redirect URIs `https://useprepagent.app/auth/callback` and `/calendar/callback`), `www` redirects to it; API `https://api.useprepagent.app`.
+- AWS Free plan, $100 credits, plan ends 16 May 2027 **(confirm)**; one region, `us-west-2`; `t3.micro` x86_64, 10 GB gp3, 2 GB swap file, CPU-credit mode **standard** (T3 launches unlimited by default, which can bill surplus credits). No code or script change was needed: `Caddyfile` and `docker-compose.prod.yml` take the domain from `DOMAIN`, and nothing pins an architecture.
+- Teardown checklist added (runbook section 12), because the Free plan closes the account at its end and an Elastic IP or detached volume left behind keeps billing.
+- **Gap found while tailoring: no migration creates `users` or `briefings`** (`supabase/migrations` starts at `002` and references them). A new production Supabase project cannot be built from `002`-`007` alone; the runbook says to take a schema-only dump of the dev project and apply it first. Fixing this properly (a committed `001_base_schema.sql`) is a separate change.
+- Still unverified: everything in the runbook, the Docker build on a 1 GB instance, memory and swap behaviour under a pipeline run, and the disk budget on 10 GB.
+
 ## Estimated monthly cost
 Fixed infrastructure (US region list prices, approximate, **confirm** with the AWS calculator, taxes excluded):
 
 | Item | Free-tier Supabase + Vercel Hobby | With Supabase Pro |
 |---|---|---|
-| EC2 `t4g.small` on-demand | ~$12.3 | ~$12.3 |
-| EBS gp3 20 GB | ~$1.6 | ~$1.6 |
+| EC2 `t3.micro` on-demand, us-west-2 (was `t4g.small` ~$12.3) | ~$7.6 | ~$7.6 |
+| EBS gp3 10 GB (was 20 GB ~$1.6) | ~$0.8 | ~$0.8 |
 | Public IPv4 / Elastic IP | ~$3.7 | ~$3.7 |
 | Data transfer, SSM parameters, Let's Encrypt, uptime monitor, Caddy | $0 | $0 |
 | Domain (~$10-15/yr) | ~$1 | ~$1 |
 | Route 53 hosted zone (skip if registrar DNS is used) | ~$0.5 | ~$0.5 |
 | Vercel Hobby | $0 | $0 (Pro $20) |
 | Supabase | $0 (pauses after inactivity, small DB) | $25 |
-| **Fixed total** | **about $19-20** | **about $44-45** |
+| **Fixed total** | **about $13-14** (was $19-20) | **about $38-39** (was $44-45) |
 
-A `t3.micro` would save about $4-5/mo but is not recommended (Decisions 1). Reserved or Savings Plan pricing would cut EC2 by ~30-40% for a 1-year commitment and is not worth it for a project that may not live a year.
+The `t3.micro` saves about $4.7/mo against the original `t4g.small` pick (Decision 1, revised). On the AWS Free plan ($100 credits, ends 16 May 2027 **(confirm)**) the infrastructure is about $12-12.5/mo, roughly $75-95 for the six months including the domain, drawn from credits. Reserved or Savings Plan pricing would cut EC2 by ~30-40% for a 1-year commitment and is not worth it for a project that may not live a year.
 
 Variable (LLM/search) cost: **not measured.** The only datapoint in the repo is the README's rough $1.50 for a 4-case eval run including judge calls, which puts generation under about $0.38 per briefing as a loose upper bound. OpenAI embeddings are negligible next to it. Tavily is up to 6 searches per briefing (3 attempts x 2 agents) against a plan whose price and quota are **(confirm)**. So: `monthly variable = briefings/month x measured cost per briefing`, with the worst case hard-capped by Decision 6: `40/day x 30 x measured cost`. With the loose bound that would be 1,200 x $0.38 = about $456/mo, which is why the proposed global cap is a starting number to be re-derived after smoke item 11, and why the provider-side spend limits are set first. A realistic invite-only month is a few dozen briefings.
 
@@ -306,12 +315,12 @@ Not touched: `backend/.env`, `docker-compose.yml`, `.github/workflows/ci.yml`.
 
 ## Dependencies
 - Owner-provided: an AWS account, a domain name, Vercel account, a Supabase project for production, new provider keys with spend limits. No agent action creates or pays for any of these.
-- Migrations `006` (and optionally `007`) applied to the production Supabase project; `002`-`005` if the project is new.
+- Migrations `006` (and optionally `007`) applied to the production Supabase project; for a new project, the base `users`/`briefings` schema first (not in the repo, see the tailoring note), then `002`-`005`.
 - Google Cloud: production OAuth client, consent screen configured, redirect URIs for the final frontend origin, Calendar API enabled if Calendar is used.
 - Decision on Q1-Q9 below before the matching slice starts.
 
 ## Approved answers to the open questions
-- **Q1** Google Testing mode with an invite list. **Q2** the owner buys a domain; the spec assumes one (`app.<domain>` frontend, `api.<domain>` backend).
+- **Q1** Google Testing mode with an invite list. **Q2** the owner buys a domain; the spec assumes one (revised: `useprepagent.app` is the frontend, `api.useprepagent.app` the backend; the original wording was `app.<domain>`).
 - **Q3/Q12** monthly budget ceiling **$20**; defaults **3 briefings/user/day**, **20/day global**, 2 concurrent per user, all env-configurable (`MAX_BRIEFINGS_PER_USER_PER_DAY`, `MAX_BRIEFINGS_GLOBAL_PER_DAY`, `MAX_ACTIVE_BRIEFINGS_PER_USER`). Calendar-created briefings count. **Caveat the caps cannot fix:** fixed infrastructure alone is about $19-20/mo (table above), and 20/day x 30 days = 600 briefings, which would stay under $20 of LLM spend only if a briefing cost under about $0.033 (unmeasured; the loose upper bound is $0.38). So the caps limit blast radius, they do not guarantee $20: the provider-side spend limits (Decision 6A, set to the real remaining budget) are the actual ceiling. Re-derive the numbers after smoke item 11.
 - **Q5** separate production Supabase project on the free plan. Free-plan pausing after inactivity, the absence of point-in-time recovery and storage limits are **(confirm)** in the Supabase dashboard before launch; a paused project is an outage, so the uptime monitor should hit a path that touches the database weekly or the owner should plan for manual unpause.
 - **Q6** LangSmith off in production by default (`LANGSMITH_TRACING` unset; the runbook leaves it unset).
