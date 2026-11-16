@@ -1,3 +1,4 @@
+import logging
 import os
 from uuid import UUID
 
@@ -16,6 +17,8 @@ from models.briefing import (
     BriefingStatus,
 )
 from services.embeddings import process_resume_embedding
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/briefings", tags=["briefings"])
 
@@ -56,30 +59,34 @@ async def create_briefing(
             # Chunk, embed, and store in pgvector
             process_resume_embedding(user.user_id, body.resume_text)
 
-        except OpenAIError as e:
+        except OpenAIError:
             # OpenAI API failures should be temporary
+            logger.exception("Resume embedding failed (OpenAI)")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Embedding service temporarily unavailable: {e}",
+                detail="Embedding service temporarily unavailable",
             )
-        except ValueError as e:
+        except ValueError:
             # Missing API key or invalid input
+            logger.exception("Resume embedding configuration error")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Configuration error: {e}",
+                detail="Configuration error",
             )
-        except Exception as e:
+        except Exception:
+            logger.exception("Failed to save resume")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to save resume: {e}",
+                detail="Failed to save resume",
             )
 
     try:
         result = supabase.table("briefings").insert(row).execute()
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to create briefing")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create briefing: {e}",
+            detail="Failed to create briefing",
         )
 
     briefing = result.data[0]
@@ -131,10 +138,11 @@ async def list_briefings(
             .eq("user_id", user.user_id)
             .execute()
         )
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to fetch briefings")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch briefings: {e}",
+            detail="Failed to fetch briefings",
         )
 
     items = [BriefingListItem(**row) for row in result.data]
@@ -169,10 +177,11 @@ async def get_briefing(
             .eq("user_id", user.user_id)
             .execute()
         )
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to fetch briefing")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch briefing: {e}",
+            detail="Failed to fetch briefing",
         )
 
     if not result.data:

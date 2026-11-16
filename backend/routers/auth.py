@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 
 import jwt
@@ -11,6 +12,8 @@ from services.google_auth import (
     build_authorization_url,
     exchange_code_for_tokens,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -42,8 +45,9 @@ async def auth_google():
     try:
         url, state = build_authorization_url()
         return {"url": url, "state": state}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to build auth URL: {e}")
+    except Exception:
+        logger.exception("Failed to build auth URL")
+        raise HTTPException(status_code=500, detail="Failed to build auth URL")
 
 
 @router.get("/callback", response_model=TokenResponse)
@@ -57,8 +61,9 @@ async def auth_callback(
         token_data = await exchange_code_for_tokens(code, state)
     except InvalidOAuthStateError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Token exchange failed: {e}")
+    except Exception:
+        logger.exception("Token exchange failed")
+        raise HTTPException(status_code=400, detail="Token exchange failed")
 
     email = token_data["email"]
     access_token = token_data["access_token"]
@@ -92,8 +97,9 @@ async def auth_callback(
                 .execute()
             )
             user = result.data[0]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    except Exception:
+        logger.exception("Database error during user upsert")
+        raise HTTPException(status_code=500, detail="Database error")
 
     session_token = _create_session_token(user["id"], email)
     return {"token": session_token, "email": email}
