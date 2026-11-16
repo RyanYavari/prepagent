@@ -193,3 +193,29 @@ Metrics are selectable and context recall is opt-in. Generated briefings are cac
 
 **Revisit when:**
 A cheaper non-self-grading judge (or batch pricing for the judge) is validated against the Opus-scored baseline.
+
+---
+
+## 2026-11-15 Synthesis prompt: hedge inferences, frame requirements as inferred, no trend generalisation
+
+**Status:** Accepted (not yet measured: no live eval was run for this change)
+
+**Context:**
+The claim-level audit of the eval baseline found the real faithfulness problems were few but specific: role requirements stated as fact with no job description to support them, resume-to-company connections presented as established, gaps inferred from what a resume omits, and one cited event stretched into a trend (a single acquisition described as acquisitions in a whole area).
+
+**Decision:**
+One addition to `SYSTEM_PROMPT` in `agents/synthesis.py` (nothing else changed): (1) anything inferred rather than stated in the context (a requirement, a candidate-to-company connection, a gap) is phrased as a hedged inference ("likely", "based on the company's focus on X") and tied to the specific company or resume fact it rests on, cited as before; (2) because no job description is provided, role requirements are framed as inferred from the company research, never as stated requirements; (3) never generalise a single cited event into a trend or pattern. Prior briefings stay background only and not citable, and the citation tags and the drop-if-uncitable rule are unchanged.
+
+**Prompt hash (eval `prompt_hashes.synthesis`, sha256 prefix of `SYSTEM_PROMPT`):** `228b958d479e` before, `f7be121b67df` after. The company and interviewer hashes are unchanged (`1b541070a6cf`, `250c3b7e53c8`). Every existing eval result and baseline, including `golden_v1.json`, was generated under the old synthesis hash.
+
+**Alternatives considered:**
+- Drop unsupported requirements entirely: Rejected because inferred requirements are useful to a candidate; hedging keeps them honest.
+- Enforce hedging in code (post-validation): Rejected for now because there is no reliable way to detect an unhedged inference without another LLM call.
+- Change scoring instead of the prompt: Already done (metric v2); this targets the residual real claims.
+
+**Tradeoffs:**
+- Pro: inferred items become visibly inferred, so a wrong inference reads as a guess, not a fact
+- Con: more hedged wording may read as less confident; items without a citable fact may now be dropped more often; the effect is unmeasured until a live eval (`--rescore` cannot test it because it reuses briefings made with the old prompt, so a normal run is needed)
+
+**Revisit when:**
+A Sonnet-judged metric-v2 run on the new prompt shows whether synthesis faithfulness, answer relevancy and the dropped-citation counts moved; revert if relevancy or usefulness drops without a faithfulness gain.

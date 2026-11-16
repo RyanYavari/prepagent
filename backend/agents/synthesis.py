@@ -50,7 +50,14 @@ SYSTEM_PROMPT = (
     "candidate's background, end the item with [Resume: <Section>] naming the "
     "resume section it comes from. If you cannot cite a source, do not include the "
     "claim. Do not connect the candidate's experience to the company's needs unless "
-    "both are present in the context. Prior briefings are background only and "
+    "both are present in the context. Anything you infer rather than find stated in "
+    "the context (a role requirement, a connection between the candidate and the "
+    "company, or a gap) must be phrased as a hedged inference, using words such as "
+    '"likely" or "based on the company\'s focus on X", and tied to the specific '
+    "company or resume fact it rests on, cited as above. No job description is "
+    "provided, so frame role requirements as inferred from the company research, "
+    "never as stated requirements. Never generalise a single cited event into a "
+    "trend or pattern. Prior briefings are background only and "
     "cannot be cited. Suggested questions are questions for the candidate to ask "
     "and do not need citations. {interviewer_rule} " + UNTRUSTED_RULE
 )

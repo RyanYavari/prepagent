@@ -184,6 +184,53 @@ def test_system_prompt_requires_source_attribution():  # scenario 2
     assert "do not include" in system.lower()
 
 
+def test_system_prompt_requires_hedged_inferences_tied_to_facts():
+    _, _, structured, _ = _run_with_llm(_state())
+    system = _prompt_text(structured)["system"]
+    low = system.lower()
+    # inferred requirements/connections/gaps must be hedged and tied to a fact
+    assert "infer" in low and "hedged inference" in low
+    assert '"likely"' in system and "based on the company's focus on X" in system
+    assert "role requirement" in low and "connection" in low and "gap" in low
+    assert "specific company or resume fact" in low
+
+
+def test_system_prompt_frames_requirements_as_inferred_without_a_job_description():
+    _, _, structured, _ = _run_with_llm(_state())
+    low = _prompt_text(structured)["system"].lower()
+    assert "no job description is provided" in low
+    assert "inferred from the company research" in low
+    assert "never as stated requirements" in low
+
+
+def test_system_prompt_forbids_generalising_one_event_into_a_trend():
+    _, _, structured, _ = _run_with_llm(_state())
+    low = _prompt_text(structured)["system"].lower()
+    assert "never generalise a single cited event into a trend" in low
+
+
+def test_prior_briefings_remain_not_citable_in_prompt():
+    from agents.synthesis import SYSTEM_PROMPT
+
+    low = SYSTEM_PROMPT.lower()
+    assert "prior briefings are background only and cannot be cited" in low
+    # citation rules are unchanged: sources and resume sections only
+    assert "[source: <url>]" in low and "[resume: <section>]" in low
+    assert "if you cannot cite a source, do not include the claim" in low
+
+
+def test_system_prompt_formats_without_stray_placeholders():
+    from agents.synthesis import (
+        INTERVIEWER_RULE_OFF,
+        INTERVIEWER_RULE_ON,
+        SYSTEM_PROMPT,
+    )
+
+    for rule in (INTERVIEWER_RULE_ON, INTERVIEWER_RULE_OFF):
+        text = SYSTEM_PROMPT.format(interviewer_rule=rule)
+        assert "{" not in text and "}" not in text
+
+
 def test_human_message_contains_context_with_sources():  # scenario 2
     state = _state(
         retrieved_context={
