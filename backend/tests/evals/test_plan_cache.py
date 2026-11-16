@@ -158,3 +158,29 @@ def test_corrupt_cache_entry_is_a_miss_without_content(tmp_path):
     (tmp_path / "c.json").write_text("{not json")
     with pytest.raises(BriefingCacheMiss, match="unreadable"):
         cache.load(col.case)
+
+
+# --- job description: cache arms must not overwrite each other ---
+
+
+def test_cache_file_name_differs_with_and_without_a_jd(tmp_path):
+    cache = BriefingCache(tmp_path)
+    plain = case()
+    with_jd = plain.model_copy(update={"job_description": "Needs Go"})
+    assert cache._path(plain.id, plain) != cache._path(with_jd.id, with_jd)
+    assert cache._path(with_jd.id, with_jd).name == "c1-jd.json"
+    assert cache._path(plain.id, plain).name == "c1.json"  # unchanged for v1 cases
+
+
+def test_jd_on_and_off_arms_both_stay_loadable(tmp_path):
+    cache = BriefingCache(tmp_path)
+    on = case(job_description="Needs Go")
+    off = on.model_copy(update={"job_description": None})
+    for c in (on, off):
+        col = collected()
+        col.case = c
+        assert cache.save(col, agent_model="m", prompt_hashes={})
+    # the second save did not clobber the first, and each loads against its own case
+    assert cache.load(on)[0].case.job_description == "Needs Go"
+    assert cache.load(off)[0].case.job_description is None
+    assert len(list(tmp_path.glob("*.json"))) == 2

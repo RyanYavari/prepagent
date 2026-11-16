@@ -5,8 +5,11 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 load_dotenv()
 
@@ -87,6 +90,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# FastAPI's default 422 body includes `input`. For a 12k-character pasted job
+# description that would reflect it (and any recruiter details in it) back in the
+# response. Two cases leak it: errors on the field itself, and errors whose `input`
+# is the whole request body (a "missing company" error carries the entire body, and
+# so does a non-object body). Both are stripped; errors on a scalar field such as an
+# unsafe `company` still report the value the user typed.
+_NO_ECHO_FIELDS = {"job_description"}
+
+
+def _echoes_body(error: dict) -> bool:
+    loc = error.get("loc") or ()
+    if loc and loc[-1] in _NO_ECHO_FIELDS:
+        return True
+    return tuple(loc) == ("body",) or isinstance(error.get("input"), (dict, list))
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_handler(_request: Request, exc: RequestValidationError):
+    errors = [
+        {k: v for k, v in e.items() if k != "input"} if _echoes_body(e) else e
+        for e in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
+
 
 from routers.auth import router as auth_router
 from routers.calendar import router as calendar_router

@@ -186,9 +186,13 @@ def run_pipeline(
     company: str,
     interviewer: str | None = None,
     role: str | None = None,
+    job_description: str | None = None,
 ) -> None:
     """
     Run the graph for a briefing and persist the outcome.
+
+    `job_description` is request-scoped: it goes into graph state for synthesis only
+    and is never persisted, logged or put in run metadata.
 
     Status moves pending -> running -> complete (content saved) or failed.
     Runs as a background task, so it never raises: errors are logged and the
@@ -210,6 +214,7 @@ def run_pipeline(
                 "company": company,
                 "interviewer": interviewer,
                 "role": role,
+                "job_description": job_description,
                 "warnings": [],
             },
             {

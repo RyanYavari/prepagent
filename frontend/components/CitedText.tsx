@@ -28,6 +28,16 @@ export function CitedText({
     <span>
       {segments.map((seg, i) => {
         if (seg.type === "source") return <SourceLink key={i} url={seg.url} />;
+        if (seg.type === "jd") {
+          return (
+            <span
+              key={i}
+              className="inline-block align-baseline px-1.5 py-0.5 mx-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs"
+            >
+              Job description
+            </span>
+          );
+        }
         if (seg.type === "resume") {
           return (
             <span

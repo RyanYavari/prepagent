@@ -24,6 +24,7 @@ class PipelineState(TypedDict, total=False):
     company: str
     interviewer: str | None
     role: str | None
+    job_description: str | None  # request-scoped; synthesis only, never persisted
     company_research: dict[str, Any]
     interviewer_research: dict[str, Any]
     retrieved_context: dict[str, Any]

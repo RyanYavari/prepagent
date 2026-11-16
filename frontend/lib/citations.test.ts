@@ -35,6 +35,22 @@ describe("parseCitations", () => {
     ]);
   });
 
+  it("parses a bare [JD] tag as a job-description segment", () => {
+    expect(parseCitations("Needs 4+ years of Go [JD]")).toEqual([
+      { type: "text", text: "Needs 4+ years of Go " },
+      { type: "jd" },
+    ]);
+    expect(
+      parseCitations("Built Go services [JD] [Resume: Experience]").map((s) => s.type)
+    ).toEqual(["text", "jd", "text", "resume"]);
+  });
+
+  it("only accepts the exact [JD] tag", () => {
+    for (const bad of ["[jd]", "[JD: x]", "[ JD ]", "[JDX]", "[JD"]) {
+      expect(parseCitations(`a ${bad}`)).toEqual([{ type: "text", text: `a ${bad}` }]);
+    }
+  });
+
   it("handles no tags, empty and unclosed tags", () => {
     expect(parseCitations("plain")).toEqual([{ type: "text", text: "plain" }]);
     expect(parseCitations("")).toEqual([]);

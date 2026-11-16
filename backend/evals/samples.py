@@ -70,7 +70,7 @@ def parse_metrics(text: str | None) -> tuple[str, ...]:
     return tuple(chosen)
 
 
-_CITATION = re.compile(r"\s*\[(?:Source|Resume):[^\]]*\]")
+_CITATION = re.compile(r"\s*\[(?:(?:Source|Resume):[^\]]*|JD)\]")
 
 
 @dataclass
@@ -204,7 +204,9 @@ def _build_all(col: CollectedCase) -> dict[str, Sample | None]:
             "faithfulness_interviewer", question, interviewer_text, web_i
         )
 
-    primary = web_c + web_i + resume
+    # A supplied JD is a citable context for the synthesis groups.
+    jd = [f"[Job description] {case.job_description}"] if case.job_description else []
+    primary = web_c + web_i + resume + jd
     facts_text = render_synthesis_facts(s)
     all_text = render_synthesis_all(s)
     presc_text = render_prescriptive(s)

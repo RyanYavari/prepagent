@@ -4,7 +4,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
 
-from models.text_safety import validate_safe_field
+from models.text_safety import clean_long_text, validate_safe_field
 
 
 class BriefingStatus(str, Enum):
@@ -29,11 +29,24 @@ class BriefingCreate(BaseModel):
         max_length=50_000,
         description="Raw resume text to use for this briefing.",
     )
+    job_description: str | None = Field(
+        default=None,
+        max_length=12_000,
+        description=(
+            "Optional pasted job description. Request-scoped: used for this "
+            "briefing's generation and never stored or logged."
+        ),
+    )
 
     @field_validator("company", "interviewer", "role")
     @classmethod
     def _safe_text(cls, value: str | None) -> str | None:
         return validate_safe_field(value)
+
+    @field_validator("job_description")
+    @classmethod
+    def _clean_job_description(cls, value: str | None) -> str | None:
+        return clean_long_text(value)
 
 
 # --- Section models ---

@@ -200,3 +200,38 @@ def test_failed_case_yields_nothing():
     col = collected()
     col.sections, col.error = None, "RuntimeError"
     assert all(v is None for v in build_samples(col).values())
+
+
+def test_jd_tag_is_stripped_like_other_citations():
+    assert strip_citations("Needs Go [JD]") == "Needs Go"
+    assert strip_citations("Go [JD] [Resume: Experience]") == "Go"
+
+
+def test_jd_is_a_scored_context_for_synthesis_groups_only():
+    col = collected()
+    col.case = col.case.model_copy(update={"job_description": "Requires Go 4 years"})
+    out = build_samples(col)
+    jd_ctx = "[Job description] Requires Go 4 years"
+    for m in (
+        "faithfulness_synthesis",
+        "faithfulness_synthesis_all",
+        "faithfulness_prescriptive",
+    ):
+        assert jd_ctx in out[m].contexts
+    for m in ("faithfulness_company", "context_precision"):
+        assert all("Job description" not in c for c in out[m].contexts)
+
+
+def test_no_jd_leaves_synthesis_contexts_unchanged():
+    out = build_samples(collected())
+    assert all(
+        "Job description" not in c for c in out["faithfulness_synthesis"].contexts
+    )
+
+
+def test_jd_is_not_a_context_for_interviewer_or_company_groups():
+    col = collected(interviewer="Pat")
+    col.case = col.case.model_copy(update={"job_description": "Requires Go 4 years"})
+    out = build_samples(col)
+    for m in ("faithfulness_company", "faithfulness_interviewer", "answer_relevancy"):
+        assert all("Job description" not in c for c in out[m].contexts)
