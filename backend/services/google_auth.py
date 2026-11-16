@@ -6,6 +6,8 @@ import time
 import httpx
 from google_auth_oauthlib.flow import Flow
 
+from services.net_config import aretry_call, env_float, env_int
+
 SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
@@ -15,6 +17,39 @@ SCOPES = [
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
+
+# Every Google call has an explicit timeout (GOOGLE_TIMEOUT_SECONDS) and a bounded
+# retry (GOOGLE_MAX_RETRIES). Idempotent calls (GET, token refresh, revoke) retry any
+# transport error. The one-time authorization-code exchange retries only connect-class
+# errors, where the request never reached Google: after a read timeout the code may
+# already be spent, so repeating it could only fail.
+_CONNECT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout)
+_TRANSPORT_ERRORS = (httpx.TransportError,)
+
+
+def _http_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(timeout=env_float("GOOGLE_TIMEOUT_SECONDS"))
+
+
+async def _google_request(
+    method: str,
+    url: str,
+    *,
+    label: str,
+    retry_on: tuple[type[BaseException], ...] = _TRANSPORT_ERRORS,
+    **kwargs,
+) -> httpx.Response:
+    async def attempt() -> httpx.Response:
+        async with _http_client() as client:
+            return await getattr(client, method)(url, **kwargs)
+
+    return await aretry_call(
+        attempt,
+        retries=env_int("GOOGLE_MAX_RETRIES"),
+        retry_on=retry_on,
+        label=label,
+    )
+
 
 # Calendar connect flow (specs/calendar-detection.md): exactly one scope, read-only
 # events. Sign-in scopes above are intentionally separate.
@@ -106,17 +141,19 @@ async def exchange_code_for_tokens(code: str, state: str) -> dict:
         redirect_uri=_get_redirect_uri(),
         code_verifier=code_verifier,
     )
-    flow.fetch_token(code=code)
+    # Sync call through `requests` (no timeout by default); bound it.
+    flow.fetch_token(code=code, timeout=env_float("GOOGLE_TIMEOUT_SECONDS"))
 
     credentials = flow.credentials
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            GOOGLE_USERINFO_URL,
-            headers={"Authorization": f"Bearer {credentials.token}"},
-        )
-        response.raise_for_status()
-        user_info = response.json()
+    response = await _google_request(
+        "get",
+        GOOGLE_USERINFO_URL,
+        label="google userinfo",
+        headers={"Authorization": f"Bearer {credentials.token}"},
+    )
+    response.raise_for_status()
+    user_info = response.json()
 
     return {
         "email": user_info["email"],
@@ -197,8 +234,12 @@ def _pop_calendar_state(state: str, user_id: str) -> str:
 async def revoke_token(token: str) -> bool:
     """Best-effort revoke at Google. Returns whether Google confirmed it."""
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(GOOGLE_REVOKE_URL, data={"token": token})
+        response = await _google_request(
+            "post",
+            GOOGLE_REVOKE_URL,
+            label="google revoke",
+            data={"token": token},
+        )
         return response.status_code == 200
     except httpx.HTTPError:
         return False
@@ -213,18 +254,20 @@ async def exchange_calendar_code(code: str, state: str, user_id: str) -> dict:
     """
     verifier = _pop_calendar_state(state, user_id)
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                GOOGLE_TOKEN_URL,
-                data={
-                    "code": code,
-                    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-                    "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
-                    "redirect_uri": _calendar_redirect_uri(),
-                    "grant_type": "authorization_code",
-                    "code_verifier": verifier,
-                },
-            )
+        response = await _google_request(
+            "post",
+            GOOGLE_TOKEN_URL,
+            label="google code exchange",
+            retry_on=_CONNECT_ERRORS,  # the code is single-use
+            data={
+                "code": code,
+                "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+                "redirect_uri": _calendar_redirect_uri(),
+                "grant_type": "authorization_code",
+                "code_verifier": verifier,
+            },
+        )
     except httpx.HTTPError as e:
         raise CalendarConnectError("Token exchange failed") from e
     if response.status_code != 200:
@@ -245,16 +288,17 @@ async def exchange_calendar_code(code: str, state: str, user_id: str) -> dict:
 async def refresh_calendar_access_token(refresh_token: str) -> str:
     """New access token (memory only). Distinguishes revoked from transient."""
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                GOOGLE_TOKEN_URL,
-                data={
-                    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-                    "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
-                    "refresh_token": refresh_token,
-                    "grant_type": "refresh_token",
-                },
-            )
+        response = await _google_request(
+            "post",
+            GOOGLE_TOKEN_URL,
+            label="google token refresh",
+            data={
+                "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+        )
     except httpx.HTTPError as e:
         raise CalendarUnavailableError("Token refresh network error") from e
     if response.status_code == 200:

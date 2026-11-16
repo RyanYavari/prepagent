@@ -7,10 +7,11 @@ Retries are bounded and only for transient failures; messages from the failed ca
 are never logged (they can carry URLs or request details).
 """
 
+import asyncio
 import logging
 import os
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ _FLOATS = {
     "EMBEDDING_TIMEOUT_SECONDS": (15.0, 1.0, 120.0),
     "TAVILY_TIMEOUT_SECONDS": (12.0, 1.0, 120.0),
     "SUPABASE_TIMEOUT_SECONDS": (10.0, 1.0, 120.0),
+    "GOOGLE_TIMEOUT_SECONDS": (10.0, 1.0, 120.0),
     "PIPELINE_DEADLINE_SECONDS": (120.0, 10.0, 900.0),
     "STALE_RUNNING_MINUTES": (10.0, 1.0, 1440.0),
 }
@@ -31,6 +33,7 @@ _INTS = {
     "EMBEDDING_MAX_RETRIES": (2, 0, 5),
     "TAVILY_MAX_RETRIES": (1, 0, 5),
     "SUPABASE_MAX_RETRIES": (2, 0, 5),
+    "GOOGLE_MAX_RETRIES": (1, 0, 5),
 }
 
 
@@ -84,3 +87,34 @@ def retry_call(
                 retries,
             )
             (sleep or time.sleep)(min(base_delay * 2 ** (attempt - 1), max_delay))
+
+
+async def aretry_call(
+    fn: Callable[[], Awaitable[T]],
+    *,
+    retries: int,
+    retry_on: tuple[type[BaseException], ...],
+    label: str,
+    base_delay: float = 0.5,
+    max_delay: float = 4.0,
+    sleep: Callable[[float], Awaitable[None]] | None = None,
+) -> T:
+    """Async twin of `retry_call`: same bounds, same logging (class name only)."""
+    attempt = 0
+    while True:
+        try:
+            return await fn()
+        except retry_on as exc:
+            if attempt >= retries:
+                raise
+            attempt += 1
+            logger.warning(
+                "Retrying %s after %s (attempt %d of %d)",
+                label,
+                type(exc).__name__,
+                attempt,
+                retries,
+            )
+            await (sleep or asyncio.sleep)(
+                min(base_delay * 2 ** (attempt - 1), max_delay)
+            )
