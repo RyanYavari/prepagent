@@ -4,7 +4,6 @@ import os
 
 import jwt
 from fastapi import APIRouter, HTTPException, Query
-from supabase import create_client
 
 from models.user import AuthURLResponse, TokenResponse
 from services.google_auth import (
@@ -12,6 +11,7 @@ from services.google_auth import (
     build_authorization_url,
     exchange_code_for_tokens,
 )
+from services.supabase_client import create_client
 
 logger = logging.getLogger(__name__)
 

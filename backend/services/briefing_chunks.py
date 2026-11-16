@@ -9,9 +9,8 @@ company can retrieve it (ARCHITECTURE_DECISIONS.md section 3, specs/briefing-chu
 import os
 from typing import Any
 
-from supabase import create_client
-
 from services.embeddings import embed_text
+from services.supabase_client import create_client, execute
 
 _TABLE = "resume_embeddings"
 
@@ -91,13 +90,12 @@ def write_briefing_chunks(
     ]
 
     supabase = _get_supabase()
-    (
+    execute(
         supabase.table(_TABLE)
         .delete()
         .eq("user_id", user_id)
         .eq("briefing_id", briefing_id)
         .eq("doc_type", "briefing")
-        .execute()
     )
-    supabase.table(_TABLE).insert(rows).execute()
+    execute(supabase.table(_TABLE).insert(rows))
     return len(rows)

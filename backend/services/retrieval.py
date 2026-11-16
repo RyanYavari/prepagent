@@ -10,9 +10,8 @@ import os
 from typing import Any, cast
 from uuid import UUID
 
-from supabase import create_client
-
 from models.retrieval import RetrievalResult, RetrievedChunk
+from services.supabase_client import create_client, execute
 
 # Explicit column list: the embedding vector is never selected.
 _COLUMNS = "doc_type, section, content, company, role, created_at"
@@ -47,23 +46,23 @@ def retrieve_user_context(user_id: str | UUID, company: str) -> RetrievalResult:
 
     resume_rows = cast(
         list[dict[str, Any]],
-        supabase.table(_TABLE)
-        .select(_COLUMNS)
-        .eq("user_id", str(user_id))
-        .eq("doc_type", "resume")
-        .execute()
-        .data,
+        execute(
+            supabase.table(_TABLE)
+            .select(_COLUMNS)
+            .eq("user_id", str(user_id))
+            .eq("doc_type", "resume")
+        ).data,
     )
 
     briefing_rows = cast(
         list[dict[str, Any]],
-        supabase.table(_TABLE)
-        .select(_COLUMNS)
-        .eq("user_id", str(user_id))
-        .eq("doc_type", "briefing")
-        .order("created_at", desc=True)
-        .execute()
-        .data,
+        execute(
+            supabase.table(_TABLE)
+            .select(_COLUMNS)
+            .eq("user_id", str(user_id))
+            .eq("doc_type", "briefing")
+            .order("created_at", desc=True)
+        ).data,
     )
 
     # Company is matched in Python, not via ilike: PostgREST treats `*` as a wildcard

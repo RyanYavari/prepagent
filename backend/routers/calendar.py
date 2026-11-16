@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from supabase import create_client
 
 from agents.pipeline import run_pipeline
 from dependencies.auth import CurrentUser, get_current_user
@@ -40,6 +39,7 @@ from services.google_auth import (
     exchange_calendar_code,
     revoke_token,
 )
+from services.supabase_client import create_client
 from services.token_crypto import TokenCryptoError, decrypt_token, encrypt_token
 
 logger = logging.getLogger(__name__)

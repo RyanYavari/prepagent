@@ -197,7 +197,10 @@ def test_run_pipeline_failure_marks_failed(caplog):
         _run_pipeline(graph, sb)  # must not raise
 
     updates = _updates(sb)
-    assert updates[-1] == {"status": "failed"}
+    assert updates[-1] == {
+        "status": "failed",
+        "failure_reason": pipeline.REASON_ERROR,
+    }
     assert not any("content" in u for u in updates)
     assert "tavily down" in caplog.text
 
@@ -228,7 +231,7 @@ def test_run_pipeline_persist_error_marks_failed():
 
     _run_pipeline(graph, sb)
 
-    assert _updates(sb)[-1] == {"status": "failed"}
+    assert _updates(sb)[-1]["status"] == "failed"
 
 
 # --- briefing chunk writer wiring (specs/briefing-chunk-writer.md scenarios 5, 6, 7) ---
@@ -267,7 +270,7 @@ def test_chunk_writer_failure_keeps_briefing_complete(error, caplog):
 
     updates = _updates(sb)
     assert updates[-1]["status"] == "complete"
-    assert not any(u == {"status": "failed"} for u in updates)
+    assert not any(u.get("status") == "failed" for u in updates)
     assert str(error) in caplog.text
 
 

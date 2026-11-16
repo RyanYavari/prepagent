@@ -47,9 +47,21 @@ def configure_logging() -> None:
 configure_logging()
 
 
+def _startup_sweep() -> None:
+    """Fail briefings orphaned on `running` by a previous process. Never raises."""
+    try:
+        from services.briefings import sweep_stale_running
+        from services.supabase_client import get_service_client
+
+        sweep_stale_running(get_service_client())
+    except Exception:
+        logging.getLogger(__name__).exception("Startup stale briefing sweep failed")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Start the optional calendar poller (off unless the interval is set)."""
+    """Sweep stale runs, then start the optional calendar poller (off unless set)."""
+    await asyncio.to_thread(_startup_sweep)
     from routers.calendar import _get_supabase
     from services.calendar_poller import poll_interval_minutes, run_poller
 

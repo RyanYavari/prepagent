@@ -88,6 +88,7 @@ class BriefingResponse(BaseModel):
     interview_date: str | None = None
     status: BriefingStatus
     content: BriefingSections | None = None
+    failure_reason: str | None = None
     created_at: str
 
 

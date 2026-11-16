@@ -74,15 +74,23 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - `run_pipeline` calls it after the row is `complete`; any failure is logged and swallowed (briefing stays `complete`)
 - Migration `006_briefing_chunk_link.sql` (`briefing_id` FK, cascade) — **must be applied to Supabase**. No backfill of earlier briefings. Not run against real OpenAI/Supabase yet (mocked tests only)
 
+### ✅ Complete (Week 3, Pipeline hardening) — after a real run hung 3+ min on `running` with nothing logged
+- Cause (inferred, not reproduced): no outbound call had a sane limit. Anthropic/OpenAI SDK read timeout defaulted to 600s, postgrest to 120s, Tavily had no retry, and the SDKs' retry logs were INFO (hidden). A DNS blip plus a long read timeout looks exactly like a silent hang
+- `services/net_config.py`: all limits read from env at call time, bad values fall back to defaults. `LLM_TIMEOUT_SECONDS`=45 / `LLM_MAX_RETRIES`=1, `EMBEDDING_TIMEOUT_SECONDS`=15 / `EMBEDDING_MAX_RETRIES`=2, `TAVILY_TIMEOUT_SECONDS`=12 / `TAVILY_MAX_RETRIES`=1, `SUPABASE_TIMEOUT_SECONDS`=10 / `SUPABASE_MAX_RETRIES`=2, `PIPELINE_DEADLINE_SECONDS`=120, `STALE_RUNNING_MINUTES`=10. `retry_call` logs the exception class only, never its message
+- `services/supabase_client.py`: every module builds its client via `create_client` here (timeout set); `execute(builder)` retries connect-class errors only (never read timeouts, so inserts are not duplicated). Used for the pipeline's own calls (status updates, retrieval, chunk writer, sweep); request-path routers get timeouts but no retry. Do not inject a shared `httpx_client` into supabase: it drops the base URL and `apikey` header
+- `agents/pipeline.py`: graph runs in a worker thread with an overall deadline; on timeout the row is `failed` with a generic `failure_reason` and a cancel flag stops the straggler before its next node. Every node logs `node=… briefing_id=… event=start|end|error elapsed=…` and the run logs `pipeline … event=end status=… elapsed=…` (ids and timings only)
+- `services/briefings.py` `sweep_stale_running`: `running` rows older than `STALE_RUNNING_MINUTES` (by `created_at`) become `failed`; runs at startup (`main._startup_sweep`, all users) and on `GET /briefings` (that user). Only `running` is swept; a `pending` row orphaned by a restart is not
+- Migration `007_briefing_failure_reason.sql` adds `briefings.failure_reason`; optional for correctness (writes fall back to status-only when the column is missing). `BriefingResponse.failure_reason` is returned but the frontend does not show it yet
+- Not re-run against real services; tests are mocked. A straggler thread cannot be killed, it only stops at the next node boundary and is bounded by per-call timeouts
+
 ### ❌ Not Started (Week 2+)
 - **supervisor.py** stays empty: fixed DAG, no supervisor
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
 - **RAGAS evaluation**: Not implemented
-- Failure reason is not persisted (only `failed` status); a crash mid-run leaves the row `running`
 
 ### Next Task
 1. **Manually verify the briefing viewer in a browser** (the calendar flow is already verified)
-2. Apply migration 006, then smoke-test the chunk writer with real keys (run two briefings for one company)
+2. Apply migrations 006 and 007 (007 optional), then smoke-test the chunk writer with real keys (run two briefings for one company)
 3. Next feature: spec it first with /spec (RAGAS evaluation per ADR §5 is the largest open item)
 
 ## Stack
@@ -136,6 +144,8 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - Frontend work must be checked in a real browser (run backend + frontend, exercise the page) before it is called done. If that isn't possible, say explicitly that it is unverified. Lint, `tsc` and `npm run build` can all pass without the page ever running, so they don't count as verification.
 
 - Each Bash call is a fresh shell, so the venv is not active between calls: put `source backend/venv/bin/activate` in the same command as `pytest`, `ruff` or `mypy` (otherwise "command not found").
+
+- `tests/conftest.py` patches `main._startup_sweep` for every test because `backend/.env` holds real credentials. When patching sleeps in tests, patch the module's own `time` reference (`patch("services.net_config.time")`), not `time.sleep`, which also silences the test's own sleeps
 
 ## Known local issues
 - mypy 2.4.1 "INTERNAL ERROR" locally is an environment problem, not a type error: it writes its cache via `sqlite3`, and this machine's Homebrew Python can't load `libsqlite3.dylib`. Type errors are reported before the crash; for a clean exit code run `mypy . --ignore-missing-imports --cache-dir=/dev/null --no-sqlite-cache` from `backend/` (same command CI runs, plus the cache flags). Config is in `backend/mypy.ini`.
