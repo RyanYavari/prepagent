@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from services.calendar import Attendee, NormalizedEvent
 
@@ -27,7 +28,7 @@ def raw_event(**over) -> dict:
 
 
 def norm_event(**over) -> NormalizedEvent:
-    base = {
+    base: dict[str, Any] = {
         "id": "evt1",
         "etag": '"e1"',
         "start": "2026-11-18T12:00:00+00:00",

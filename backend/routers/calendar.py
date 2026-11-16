@@ -7,7 +7,6 @@ the real exception is logged server-side.
 import logging
 import os
 from datetime import UTC, datetime
-from functools import partial
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -197,7 +196,7 @@ async def sync_calendar(
         result = await sync_user_calendar(
             _get_supabase(),
             user.user_id,
-            partial(background_tasks.add_task, run_pipeline),
+            lambda **kw: background_tasks.add_task(run_pipeline, **kw),
         )
     except CalendarNotConnectedError:
         raise HTTPException(
@@ -357,7 +356,7 @@ async def confirm_detection(
             supabase,
             user.user_id,
             fields,
-            partial(background_tasks.add_task, run_pipeline),
+            lambda **kw: background_tasks.add_task(run_pipeline, **kw),
         )
         supabase.table("calendar_detections").update(
             {"status": "briefing_created", "briefing_id": briefing["id"]}

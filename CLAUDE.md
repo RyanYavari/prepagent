@@ -127,7 +127,7 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - Frontend work must be checked in a real browser (run backend + frontend, exercise the page) before it is called done. If that isn't possible, say explicitly that it is unverified. Lint, `tsc` and `npm run build` can all pass without the page ever running, so they don't count as verification.
 
 ## Known local issues
-- mypy 2.4.1 crashes with "INTERNAL ERROR" locally, even on untouched files, so type-checking can't be verified here; rely on CI. Pin not bumped yet.
+- mypy 2.4.1 "INTERNAL ERROR" locally is an environment problem, not a type error: it writes its cache via `sqlite3`, and this machine's Homebrew Python can't load `libsqlite3.dylib`. Type errors are reported before the crash; for a clean exit code run `mypy . --ignore-missing-imports --cache-dir=/dev/null --no-sqlite-cache` from `backend/` (same command CI runs, plus the cache flags). Config is in `backend/mypy.ini`.
 
 ## Testing
 - pytest for backend, run with `pytest -x -q` from backend/

@@ -1,6 +1,5 @@
 import logging
 import os
-from functools import partial
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -78,7 +77,7 @@ async def create_briefing(
             supabase,
             user.user_id,
             body,
-            partial(background_tasks.add_task, run_pipeline),
+            lambda **kw: background_tasks.add_task(run_pipeline, **kw),
         )
     except Exception:
         logger.exception("Failed to create briefing")

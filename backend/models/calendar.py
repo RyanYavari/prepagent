@@ -54,9 +54,9 @@ class DetectionConfirmRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    company: str | None = Field(None, min_length=1, max_length=200)
-    role: str | None = Field(None, max_length=200)
-    interviewer: str | None = Field(None, max_length=200)
+    company: str | None = Field(default=None, min_length=1, max_length=200)
+    role: str | None = Field(default=None, max_length=200)
+    interviewer: str | None = Field(default=None, max_length=200)
 
     @field_validator("company", "role", "interviewer")
     @classmethod
