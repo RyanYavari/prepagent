@@ -8,6 +8,7 @@ import {
   POLL_INTERVAL_MS,
   POLL_MAX_FAILURES,
   POLL_MAX_MS,
+  isNotFoundStatus,
   type Briefing,
 } from "@/lib/briefing";
 
@@ -42,7 +43,7 @@ export default function BriefingViewer() {
           router.push("/");
           return "stop";
         }
-        if (res.status === 404) {
+        if (isNotFoundStatus(res.status)) {
           setNotFound(true);
           return "stop";
         }

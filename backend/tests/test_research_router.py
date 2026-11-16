@@ -259,12 +259,13 @@ class TestBriefingViewWithWarnings:
     """Scenario 10: GET /briefings/{id} returns persisted warnings."""
 
     def _get(self, client, content):
+        bid = str(uuid4())
         with patch("routers.research._get_supabase") as fn:
             sb = MagicMock()
             fn.return_value = sb
             sb.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = [
                 {
-                    "id": "b1",
+                    "id": bid,
                     "user_id": "u",
                     "company": "Stripe",
                     "status": "complete",
@@ -272,7 +273,7 @@ class TestBriefingViewWithWarnings:
                     "created_at": "2026-01-01T00:00:00Z",
                 }
             ]
-            return client.get("/briefings/b1")
+            return client.get(f"/briefings/{bid}")
 
     def test_returns_warnings(self, client_with_auth):
         resp = self._get(client_with_auth, {"warnings": ["limited info"]})
@@ -283,6 +284,28 @@ class TestBriefingViewWithWarnings:
         resp = self._get(client_with_auth, {"company_overview": {"summary": "x"}})
         assert resp.status_code == 200
         assert resp.json()["content"]["warnings"] == []
+
+
+class TestGetBriefingNotFound:
+    """GET /briefings/{id}: malformed or unknown ids are 404, never 500."""
+
+    @pytest.mark.parametrize("bad_id", ["abc", "123", "not-a-uuid", "b1"])
+    def test_malformed_id_returns_404_without_querying_db(
+        self, client_with_auth, bad_id
+    ):
+        with patch("routers.research._get_supabase") as fn:
+            resp = client_with_auth.get(f"/briefings/{bad_id}")
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Briefing not found"
+        fn.assert_not_called()
+
+    def test_unknown_uuid_returns_404(self, client_with_auth):
+        with patch("routers.research._get_supabase") as fn:
+            sb = MagicMock()
+            fn.return_value = sb
+            sb.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = []
+            resp = client_with_auth.get(f"/briefings/{uuid4()}")
+        assert resp.status_code == 404
 
 
 class TestCreateBriefingTriggersPipeline:

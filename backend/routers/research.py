@@ -1,4 +1,5 @@
 import os
+from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from openai import OpenAIError
@@ -148,6 +149,16 @@ async def get_briefing(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Get a specific briefing with full section content."""
+    # Briefing ids are UUIDs; a malformed id can never match a row, and would
+    # otherwise reach Postgres as an invalid uuid cast and surface as a 500.
+    try:
+        UUID(briefing_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Briefing not found",
+        )
+
     supabase = _get_supabase()
 
     try:

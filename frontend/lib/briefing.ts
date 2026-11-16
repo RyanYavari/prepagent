@@ -52,3 +52,9 @@ export interface Briefing {
 export const POLL_INTERVAL_MS = 3000;
 export const POLL_MAX_MS = 5 * 60 * 1000;
 export const POLL_MAX_FAILURES = 3;
+
+// 404: unknown id. 422: id rejected by request validation (defence in depth
+// if the backend ever validates the path param). Both mean "no such briefing".
+export function isNotFoundStatus(status: number): boolean {
+  return status === 404 || status === 422;
+}
