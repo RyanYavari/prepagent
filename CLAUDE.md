@@ -118,6 +118,7 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 
 ## What Claude gets wrong
 - Running `ruff format <dir>` then `git add -u` sweeps unrelated files into a commit. Format only the files you changed, and stage them by name.
+- The same goes for `ruff check --fix`: run it on the files you changed, not a directory (`ruff check --fix services` can rewrite files you never touched).
 
 - On macOS, `sed -i` needs an explicit backup-suffix argument (`sed -i ''`) and fails on multi-line edits. Use the Edit tool or a Python script instead.
 - Task files (`specs/tasks-*.md`) get their "Run /review" boxes ticked only if a review actually ran for that slice. Don't leave them unchecked after the final review passes.
@@ -132,6 +133,7 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - pytest for backend, run with `pytest -x -q` from backend/
 - Test files go in backend/tests/ mirroring the source structure
 - Write failing tests first, then implement
+- For tests that need stateful DB behavior (unique constraints, insert-ignore upserts, conditional updates), reuse `FakeSupabase` in `backend/tests/calendar_helpers.py` instead of chaining `MagicMock` calls. It supports `select/insert/upsert/update/delete` with `eq`/`neq` filters and enforces the `UNIQUE_KEYS` per table; add a table's unique key there when a test depends on it.
 
 ## Non-obvious gotchas
 - All agents get their LLM from `agents/llm.py` (`structured_llm`): `AGENT_MODEL` env var (default `claude-sonnet-5-5`), `method="json_schema"` for structured output, and no `temperature` (the model returns 400 for forced `tool_choice` and for `temperature`)
