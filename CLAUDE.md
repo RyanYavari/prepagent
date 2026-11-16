@@ -67,7 +67,7 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 
 ### ✅ Complete (Sign-in tokens) — specs/signin-token-removal.md
 - `/auth/callback` stores no Google token (insert is `{email}` only); sign-in uses `access_type=online`, `exchange_code_for_tokens` returns `email`/`name` only; tokens never logged
-- `backend/scripts/revoke_stored_tokens.py` (`python -m scripts.revoke_stored_tokens` from backend/) revokes stored tokens at Google best effort and nulls the columns; migration `005_drop_signin_tokens.sql` then drops them (guarded: fails while any token remains). **Order: deploy code, run script, apply 005**
+- `backend/scripts/revoke_stored_tokens.py` (`python -m scripts.revoke_stored_tokens` from backend/) revokes stored tokens at Google best effort and nulls the columns; migration `005_drop_signin_tokens.sql` then drops them (guarded: fails while any token remains). **Order was: deploy code, run script, apply 005.** Script run, migration 005 applied, and sign-in verified in a browser by the user
 
 ### ✅ Complete (Week 3, Briefing chunk writer) — specs/briefing-chunk-writer.md
 - `services/briefing_chunks.py`: `write_briefing_chunks` renders the 4 briefing sections (not `warnings`, empty ones skipped) to text, embeds them, and replaces the briefing's `doc_type='briefing'` rows in `resume_embeddings` (company/role/`briefing_id`), so retrieval now returns same-company prior briefings
@@ -82,9 +82,8 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 
 ### Next Task
 1. **Manually verify the briefing viewer in a browser** (the calendar flow is already verified)
-2. Run the sign-in token revoke script, then apply migration 005
-3. Apply migration 006, then smoke-test the chunk writer with real keys (run two briefings for one company)
-4. Next feature: spec it first with /spec (RAGAS evaluation per ADR §5 is the largest open item)
+2. Apply migration 006, then smoke-test the chunk writer with real keys (run two briefings for one company)
+3. Next feature: spec it first with /spec (RAGAS evaluation per ADR §5 is the largest open item)
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet
@@ -135,6 +134,8 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - In zsh, a variable holding several file names (`F="a b"; ruff check $F`) is not split into separate arguments. Pass the files directly.
 - Mocked LLM tests don't catch API-level incompatibilities (forced `tool_choice` and `temperature` both 400'd on the real model while every mocked test passed). Before calling an agent done, run one real smoke call per agent: `RUN_LIVE_LLM_TESTS=1 pytest tests/test_llm.py -k live` plus the node itself with real keys.
 - Frontend work must be checked in a real browser (run backend + frontend, exercise the page) before it is called done. If that isn't possible, say explicitly that it is unverified. Lint, `tsc` and `npm run build` can all pass without the page ever running, so they don't count as verification.
+
+- Each Bash call is a fresh shell, so the venv is not active between calls: put `source backend/venv/bin/activate` in the same command as `pytest`, `ruff` or `mypy` (otherwise "command not found").
 
 ## Known local issues
 - mypy 2.4.1 "INTERNAL ERROR" locally is an environment problem, not a type error: it writes its cache via `sqlite3`, and this machine's Homebrew Python can't load `libsqlite3.dylib`. Type errors are reported before the crash; for a clean exit code run `mypy . --ignore-missing-imports --cache-dir=/dev/null --no-sqlite-cache` from `backend/` (same command CI runs, plus the cache flags). Config is in `backend/mypy.ini`.
