@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -35,12 +36,9 @@ function StatusBadge({ status }: { status: BriefingStatus }) {
 
 export default function Dashboard() {
   const router = useRouter();
-  const [email] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("email");
-    }
-    return null;
-  });
+  // null until the client has read localStorage, so server and first client
+  // render both show the same loading shell.
+  const [email, setEmail] = useState<string | null>(null);
   const [briefings, setBriefings] = useState<Briefing[]>([]);
   const [briefingsLoading, setBriefingsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +54,7 @@ export default function Dashboard() {
 
     // Fetch briefings
     const fetchBriefings = async () => {
+      setEmail(storedEmail);
       try {
         const res = await fetch(`${API_URL}/briefings?limit=20&offset=0`, {
           headers: {
@@ -95,7 +94,7 @@ export default function Dashboard() {
     router.push("/");
   };
 
-  if (briefingsLoading && !email) {
+  if (!email) {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <p className="text-gray-600">Loading...</p>
@@ -148,9 +147,10 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-3">
               {briefings.map((briefing) => (
-                <div
+                <Link
                   key={briefing.id}
-                  className="border rounded-lg p-4 hover:shadow-sm transition-shadow"
+                  href={`/prep/${briefing.id}`}
+                  className="block border rounded-lg p-4 hover:shadow-sm transition-shadow"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -175,7 +175,7 @@ export default function Dashboard() {
                       {new Date(briefing.created_at).toLocaleDateString()}
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}

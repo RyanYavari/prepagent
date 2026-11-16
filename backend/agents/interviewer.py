@@ -8,18 +8,15 @@ not mention the interviewer by name are dropped so a common name cannot pull in
 a different person (section 6, failure mode 3).
 """
 
-import os
 from typing import Any
 
-from langchain_anthropic import ChatAnthropic
-
+from agents.llm import structured_llm
 from models.briefing import InterviewerProfile
 from models.research import SearchResult
 from services.web_search import search_web
 
 MAX_ATTEMPTS = 3
 RETRY_THRESHOLD = 2  # retry while fewer than this many relevant results (ADR section 1)
-DEFAULT_MODEL = "claude-sonnet-5-5"
 WARNING_THRESHOLD = 3  # warn when fewer than this many results (ADR section 6)
 
 
@@ -70,11 +67,7 @@ def _summarize(
         for i, r in enumerate(results, start=1)
     )
     role_line = f"Role being interviewed for: {role}\n" if role else ""
-    llm = ChatAnthropic(  # type: ignore[call-arg]
-        model=os.getenv("INTERVIEWER_AGENT_MODEL", DEFAULT_MODEL),
-        temperature=0,
-    )
-    structured = llm.with_structured_output(InterviewerProfile)
+    structured = structured_llm(InterviewerProfile)
     profile = structured.invoke(
         [
             ("system", SYSTEM_PROMPT),

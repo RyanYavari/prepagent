@@ -1,9 +1,11 @@
 import os
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from openai import OpenAIError
 from supabase import create_client
 
+from agents.pipeline import run_pipeline
 from dependencies.auth import CurrentUser, get_current_user
 from models.briefing import (
     BriefingCreate,
@@ -28,9 +30,10 @@ def _get_supabase():
 @router.post("", response_model=BriefingResponse, status_code=status.HTTP_201_CREATED)
 async def create_briefing(
     body: BriefingCreate,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ):
-    """Create a new briefing request. Saves to Supabase with status 'pending'."""
+    """Create a briefing request (status 'pending') and run the pipeline in the background."""
     supabase = _get_supabase()
 
     row = {
@@ -81,7 +84,14 @@ async def create_briefing(
 
     briefing = result.data[0]
 
-    # TODO: Kick off LangGraph pipeline as a background task.
+    background_tasks.add_task(
+        run_pipeline,
+        briefing_id=briefing["id"],
+        user_id=user.user_id,
+        company=briefing["company"],
+        interviewer=briefing.get("interviewer"),
+        role=briefing.get("role"),
+    )
 
     return BriefingResponse(
         id=briefing["id"],
@@ -139,6 +149,16 @@ async def get_briefing(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Get a specific briefing with full section content."""
+    # Briefing ids are UUIDs; a malformed id can never match a row, and would
+    # otherwise reach Postgres as an invalid uuid cast and surface as a 500.
+    try:
+        UUID(briefing_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Briefing not found",
+        )
+
     supabase = _get_supabase()
 
     try:

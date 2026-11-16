@@ -31,25 +31,37 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 ### ✅ Complete (Week 2, Company Intelligence) — specs/company-intelligence.md
 - `services/web_search.py`: Tavily wrapper (`search_web`), errors propagate
 - `agents/company.py`: `company_research_node(state)` — query ladder (max 3 attempts), retry when <2 results, low-result warning when <3, Claude structured-output summary into `CompanyOverview`, `sources` set from result URLs in code (not wired into a graph yet)
-- Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model overridable via `COMPANY_AGENT_MODEL`
+- Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model set by shared `AGENT_MODEL` (agents/llm.py)
 
 ### ✅ Complete (Week 2, Interviewer Research) — specs/interviewer-research.md
 - `agents/interviewer.py`: `interviewer_research_node(state)` — skips (empty profile, no warning) when no interviewer; query ladder (max 3), drops results that don't mention the interviewer's full name, retry when <2 relevant, low-result warning when <3, wrong-person warning when no result mentions the company, Claude structured-output summary into `InterviewerProfile` (summary/background only), `sources` set from result URLs in code (not wired into a graph yet)
-- Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model overridable via `INTERVIEWER_AGENT_MODEL`
+- Needs `TAVILY_API_KEY` and `ANTHROPIC_API_KEY`; model set by shared `AGENT_MODEL` (agents/llm.py)
 
-### ⚠️ Partial
-- **Pipeline trigger**: POST /briefings creates DB record + embeds resume, but no LangGraph pipeline execution yet
+### ✅ Complete (Week 2, Synthesis) — specs/synthesis-agent.md
+- `agents/synthesis.py`: `synthesis_node(state)` — passes company overview and interviewer summary/background through, generates role insights, talking points and interviewer enrichment in one Claude structured-output call (source-attribution prompt per ADR §6 guardrail 1), then validates citations in code (guardrail 3): items need `[Source: <url>]` (url from company/interviewer sources) or `[Resume: <Section>]` (section from retrieved resume chunks), otherwise dropped with a count warning; empty talking points warn; no usable context skips the LLM; `role_insights.sources` set in code (not wired into a graph yet)
+- Needs `ANTHROPIC_API_KEY`; model set by shared `AGENT_MODEL` (agents/llm.py)
+
+### ✅ Complete (Week 2, LangGraph pipeline) — specs/langgraph-pipeline.md
+- `agents/pipeline.py`: `build_graph()` fixed-DAG `StateGraph` (company + interviewer in parallel → RAG → synthesis, no supervisor); `run_pipeline(...)` sets status `running`, invokes the graph, persists `content` and sets `complete`, or sets `failed` (logged, never raises)
+- `agents/state.py`: `PipelineState` with a de-duplicating `warnings` reducer (parallel branches)
+- POST /briefings schedules `run_pipeline` via `BackgroundTasks` with the JWT user id; node warnings persist in `content.warnings` (`BriefingSections.warnings`)
+- Needs all node env vars (`TAVILY_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) and migration 003 applied; LangSmith traces via `LANGSMITH_*` env vars
+
+### ✅ Complete (Week 2/3, Briefing viewer) — specs/briefing-viewer.md
+- `/prep/[id]` (frontend/app/prep/[id]/page.tsx): polls GET /briefings/{id} every 3s while pending/running (5-min cap, stops after 3 consecutive errors, "Check again"), failed/404/401 states, renders the 4 sections via `components/BriefingSections.tsx`
+- `lib/citations.ts` `parseCitations`: `[Source: url]` → hostname link (http/https only, noopener), `[Resume: Section]` → chip; untagged generated items get a "no source" marker; `content.warnings` shown in an amber alert above the sections
+- Dashboard cards and /prep/new now link/redirect to the viewer
+- Frontend tests: vitest (`npm test`, runs in CI). **Polling/auth/404/navigation were never run in a browser** — manual checks in `specs/tasks-briefing-viewer.md` are still unticked
 
 ### ❌ Not Started (Week 2+)
-- **Agent nodes**: synthesis.py is empty (supervisor.py stays empty: fixed DAG, no supervisor)
+- **supervisor.py** stays empty: fixed DAG, no supervisor
 - **Briefing chunk writer**: post-synthesis embedding of briefing sections (retrieval already reads them)
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
-- **LangGraph pipeline**: No StateGraph orchestration, no background task execution
-- **Briefing viewer**: No page to display generated briefing content
 - **RAGAS evaluation**: Not implemented
+- Failure reason is not persisted (only `failed` status); a crash mid-run leaves the row `running`
 
 ### Next Task
-**Week 2: Synthesis agent** (4-section briefing from company + interviewer + RAG output; source-attribution prompt per ADR §6 guardrail 1) or **LangGraph wiring** of the three existing nodes — spec it first with /spec
+**Manually verify the briefing viewer** (run backend + frontend, create a briefing, watch it poll to complete), then the **briefing chunk writer** — spec it first with /spec
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet
@@ -72,6 +84,7 @@ pytest -x -q
 # Frontend
 cd frontend && npm run dev
 npm run lint
+npm test
 npm run build
 ```
 
@@ -86,12 +99,16 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - Environment variables in .env, never hardcoded
 - Conventional commits: feat:, fix:, refactor:, test:, docs:, chore:
 - No Co-Authored-By lines in commit messages
+- One commit per spec: build all slices, then commit once after `pytest -x -q` passes and /review is APPROVE. Do not commit after each slice. (The spec/tasks docs may be committed first on their own.)
+- Endpoint tests must patch `routers.research.run_pipeline`, otherwise the real pipeline runs as a background task
 
 ## What Claude gets wrong
 - Running `ruff format <dir>` then `git add -u` sweeps unrelated files into a commit. Format only the files you changed, and stage them by name.
 
 - On macOS, `sed -i` needs an explicit backup-suffix argument (`sed -i ''`) and fails on multi-line edits. Use the Edit tool or a Python script instead.
 - Task files (`specs/tasks-*.md`) get their "Run /review" boxes ticked only if a review actually ran for that slice. Don't leave them unchecked after the final review passes.
+- In zsh, a variable holding several file names (`F="a b"; ruff check $F`) is not split into separate arguments. Pass the files directly.
+- Mocked LLM tests don't catch API-level incompatibilities (forced `tool_choice` and `temperature` both 400'd on the real model while every mocked test passed). Before calling an agent done, run one real smoke call per agent: `RUN_LIVE_LLM_TESTS=1 pytest tests/test_llm.py -k live` plus the node itself with real keys.
 
 ## Known local issues
 - mypy 2.4.1 crashes with "INTERNAL ERROR" locally, even on untouched files, so type-checking can't be verified here; rely on CI. Pin not bumped yet.
@@ -102,6 +119,7 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - Write failing tests first, then implement
 
 ## Non-obvious gotchas
+- All agents get their LLM from `agents/llm.py` (`structured_llm`): `AGENT_MODEL` env var (default `claude-sonnet-5-5`), `method="json_schema"` for structured output, and no `temperature` (the model returns 400 for forced `tool_choice` and for `temperature`)
 - Google OAuth tokens stored in Supabase users table, not in session
 - pgvector chosen over Pinecone (corpus is too small for dedicated vector service)
 - Frontend auth state lives in localStorage (session JWT)
