@@ -168,3 +168,28 @@ The main synthesis score covers factual fields only (role insights, shared inter
 
 **Revisit when:**
 Synthesis output gains structured citations per item (then check the citation directly instead of extracting facts).
+
+---
+
+## 2026-11-15 Eval cost controls: opt-in recall, briefing cache, Sonnet judge
+
+**Status:** Accepted
+
+**Context:**
+A full eval run cost about 200 LLM calls with an Opus judge, repeated in full on every scoring change because each run re-ran the pipeline, and it paid for context recall (about 1.0 by construction).
+
+**Decision:**
+Metrics are selectable and context recall is opt-in. Generated briefings are cached so `--rescore` calls only the judge. A preflight prints per-model call estimates and refuses to start above `--max-llm-calls` (no override flag). The judge default moves to `claude-sonnet-5-5`; the Opus-scored `golden_v1.json` baseline stays but is labelled, and `compare` warns that scores from different judges are not comparable.
+
+**Alternatives considered:**
+- Keep Opus as the judge and cut cases: Rejected because the case count was already small and judge cost scales with every re-score.
+- Haiku as the default judge: Rejected as a default because NLI verdict quality on long contexts is unproven; it remains one env var away.
+- Re-run the pipeline for every re-score: Rejected because it pays for generation to change only the grader.
+- Keep a `--force` to bypass the cap: Rejected because the point of the cap is a refusal.
+
+**Tradeoffs:**
+- Pro: a rescore of 4 cases is about 40-65 calls instead of about 100; metric choice controls cost directly
+- Con: the default judge equals the default agent model (self-grading, optimistic scores); older baselines are not comparable to new runs; cached briefings can lag the prompts unless the pipeline is re-run
+
+**Revisit when:**
+A cheaper non-self-grading judge (or batch pricing for the judge) is validated against the Opus-scored baseline.

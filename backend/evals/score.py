@@ -10,7 +10,7 @@ import asyncio
 import logging
 import math
 import os
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from statistics import mean
 from typing import Any
@@ -30,7 +30,10 @@ from services.net_config import env_float, env_int
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_JUDGE_MODEL = "claude-opus-5-5"
+# Sonnet-class by default for cost. Changing the judge changes every score, so runs and
+# baselines made under different judges are not comparable (see the spec, "Cost
+# controls"). The Opus-scored golden_v1.json baseline is labelled as such.
+DEFAULT_JUDGE_MODEL = "claude-sonnet-5-5"
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 # Faithfulness verdicts list every claim; 4096 truncated the JSON on a long briefing
 # (OutputParserException on the first real run).
@@ -156,7 +159,16 @@ def make_ragas_scorer(
 
     judge = make_judge(judge_model, budget)
     faithfulness = Faithfulness(llm=judge)
-    relevancy = AnswerRelevancy(llm=judge, embeddings=make_embeddings(embedding_model))
+    lazy: dict[str, Any] = {}
+
+    def relevancy_metric() -> Any:
+        # Built on first use so runs without answer_relevancy never need OPENAI_API_KEY.
+        if "m" not in lazy:
+            lazy["m"] = AnswerRelevancy(
+                llm=judge, embeddings=make_embeddings(embedding_model)
+            )
+        return lazy["m"]
+
     precision = ContextPrecisionWithReference(llm=judge)
     recall = ContextRecall(llm=judge)
 
@@ -174,7 +186,7 @@ def make_ragas_scorer(
                 retrieved_contexts=sample.contexts,
             )
         elif sample.metric == "answer_relevancy":
-            result = await relevancy.ascore(
+            result = await relevancy_metric().ascore(
                 user_input=sample.user_input, response=sample.response
             )
         elif sample.metric == "context_precision":
@@ -234,10 +246,12 @@ async def _score_samples(
     }
 
 
-def score_case(col: CollectedCase, scorer: Scorer) -> CaseScores:
-    """Score one collected case. Skipped metrics are None (never 0). Raises only
-    BudgetExceeded."""
-    samples = build_samples(col)
+def score_case(
+    col: CollectedCase, scorer: Scorer, metrics: Iterable[str] | None = None
+) -> CaseScores:
+    """Score one collected case on the selected metrics (default: all). Skipped or
+    unselected metrics are None (never 0). Raises only BudgetExceeded."""
+    samples = build_samples(col, metrics)
     results = asyncio.run(_score_samples(samples, scorer))
     out = CaseScores(scores={m: None for m in METRICS})
     for name, (value, err) in results.items():

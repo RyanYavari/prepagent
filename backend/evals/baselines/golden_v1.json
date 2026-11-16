@@ -14,19 +14,21 @@
         "synthesis": "228b958d479e"
       },
       "retrieval_mode": "in_memory",
-      "web_cache": "record"
+      "web_cache": "record",
+      "metric_version": 1
     },
     "git": {
       "sha": "0a3e880",
       "dirty": false
     },
-    "note": "Scores only (no contexts or answers). Merged from run 20261116T031056Z (8 cases) and 20261116T033650Z (notion-noresume-01, rerun after the first attempt hit an Anthropic credit error; web results replayed from cache).",
+    "note": "LABEL: scored by claude-opus-5-5 under metric_version 1 (synthesis faithfulness = all synthesis fields as written). Runs judged by another model (the default judge is now claude-sonnet-5-5) or under metric v2 are NOT comparable to these numbers. Scores only (no contexts or answers). Merged from run 20261116T031056Z (8 cases) and 20261116T033650Z (notion-noresume-01, rerun after the first attempt hit an Anthropic credit error; web results replayed from cache).",
     "source_runs": [
       "20261116T031056Z",
       "20261116T033650Z"
     ],
     "cases_run": 9,
-    "judge_model": "claude-opus-5-5"
+    "judge_model": "claude-opus-5-5",
+    "baseline_label": "opus-judge-metric-v1"
   },
   "cases": [
     {

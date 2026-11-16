@@ -63,6 +63,17 @@ def compare(a: dict[str, Any], b: dict[str, Any]) -> str:
             f"WARNING: dataset versions differ ({ma['dataset_version']} vs "
             f"{mb['dataset_version']}); this is not a like-for-like comparison."
         )
+    ca, cb = ma.get("config", {}), mb.get("config", {})
+    for key, what in (
+        ("judge_model", "judge model"),
+        ("metric_version", "metric definitions"),
+    ):
+        if ca.get(key) != cb.get(key):
+            lines.append(
+                f"WARNING: {what} changed ({ca.get(key)!r} -> {cb.get(key)!r}); "
+                "scores from different judges or definitions are NOT comparable, "
+                "so the deltas below mostly reflect that change."
+            )
     diffs = differing_meta(a, b)
     if diffs:
         lines.append(

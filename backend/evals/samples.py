@@ -9,6 +9,7 @@ Definitions (specs/ragas-eval-harness.md):
 """
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from evals.collect import CollectedCase
@@ -35,7 +36,39 @@ METRICS = (
     "context_precision",
     "context_recall",
 )
+
 DIAGNOSTIC_WITH_PRIOR = "faithfulness_synthesis_with_prior"
+DIAGNOSTIC_METRICS = (DIAGNOSTIC_WITH_PRIOR,)
+ALL_METRICS = (*METRICS, *DIAGNOSTIC_METRICS)
+# Opt-in: context recall is ~1.0 by construction (retrieval returns every chunk) and
+# the prior-briefing diagnostic is an extra faithfulness pass; both cost judge calls.
+OPT_IN_METRICS = ("context_recall", DIAGNOSTIC_WITH_PRIOR)
+DEFAULT_METRICS = tuple(m for m in ALL_METRICS if m not in OPT_IN_METRICS)
+_GROUPS = {"faithfulness": FAITHFULNESS_METRICS}
+
+
+def parse_metrics(text: str | None) -> tuple[str, ...]:
+    """Parse a --metrics value: comma-separated metric names; `faithfulness` expands
+    to the three factual groups. None selects DEFAULT_METRICS. Raises ValueError."""
+    if text is None:
+        return DEFAULT_METRICS
+    chosen: list[str] = []
+    for raw in text.split(","):
+        name = raw.strip()
+        if not name:
+            continue
+        for m in _GROUPS.get(name, (name,)):
+            if m not in ALL_METRICS:
+                raise ValueError(
+                    f"unknown metric {name!r}; choose from: "
+                    + ", ".join([*_GROUPS, *ALL_METRICS])
+                )
+            if m not in chosen:
+                chosen.append(m)
+    if not chosen:
+        raise ValueError("--metrics selected nothing")
+    return tuple(chosen)
+
 
 _CITATION = re.compile(r"\s*\[(?:Source|Resume):[^\]]*\]")
 
@@ -138,8 +171,18 @@ def _resume_text(c: RetrievedChunk) -> str:
     return f"[{c.section}] {c.content}"
 
 
-def build_samples(col: CollectedCase) -> dict[str, Sample | None]:
-    """One entry per metric (plus the diagnostic); None means skipped (score null)."""
+def build_samples(
+    col: CollectedCase, metrics: Iterable[str] | None = None
+) -> dict[str, Sample | None]:
+    """One entry per metric (plus the diagnostic); None means skipped (score null).
+    Only metrics in `metrics` (default: all) are built, so unselected ones cost
+    nothing."""
+    wanted = set(ALL_METRICS if metrics is None else metrics)
+    out = _build_all(col)
+    return {k: (v if k in wanted else None) for k, v in out.items()}
+
+
+def _build_all(col: CollectedCase) -> dict[str, Sample | None]:
     out: dict[str, Sample | None] = {m: None for m in METRICS}
     if col.sections is None or col.error:
         return out

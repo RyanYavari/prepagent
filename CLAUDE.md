@@ -86,8 +86,8 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 ### ✅ Complete (Week 3, RAGAS eval harness) — specs/ragas-eval-harness.md
 - `backend/evals/`: `python -m evals.run` (from backend/) runs `build_graph()` over `golden_v1.json` (9 synthetic cases, short resume-side `reference` fact lists; interviewers labelled `public_figure`/`fictional`), scores with ragas 0.4.3 collections metrics (faithfulness per company/interviewer/synthesis group, answer relevancy, context precision/recall) and writes `evals/results/<UTC>[-label].json` plus a terminal table. `python -m evals.compare A.json B.json` diffs two runs and lists every differing meta field (prompt hashes, models, dataset)
 - Harness-only seams, no production code changed: in-memory retrieval (no Supabase), wrapped `search_web` recording raw web results (+ `--web-cache record|replay`, gitignored `evals/cache/`), counted LLM calls. Prior-briefing chunks are never a scored context; they feed a with-prior faithfulness diagnostic
-- Controls: `--cases N` (default 3) / `--ids` / `--all`, `--max-llm-calls` (default 150, hard cap over pipeline + judge, partial results marked `truncated`), preflight estimate (22 calls/case), `--dry-run`, `--repeat`. Refuses under `CI`/pytest. Needs `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` (answer-relevancy embeddings), `TAVILY_API_KEY` (not for replay)
-- Judge model: `JUDGE_MODEL` (default `claude-opus-5-5`; if equal to `AGENT_MODEL` the run is flagged self-grading, scores optimistic). Optional LangSmith score feedback when `LANGSMITH_TRACING`+key are set
+- Controls: `--limit N` (default 3) / `--cases id1,id2` / `--all`, `--metrics` (context recall and the prior diagnostic are opt-in), `--rescore` (reuse cached briefings, judge only), a preflight that prints per-model call estimates and refuses above `--max-llm-calls` (default 150, no override; the cap also stops a run mid-way, partial results marked `truncated`), `--dry-run`, `--repeat`. Refuses under `CI`/pytest. Needs `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` (answer-relevancy embeddings), `TAVILY_API_KEY` (not for replay)
+- Judge model: `JUDGE_MODEL` (default `claude-sonnet-5-5`, which equals the default `AGENT_MODEL`, so default runs are flagged self-grading and optimistic). Changing the judge or metric version makes scores non-comparable: `golden_v1.json` is the Opus-judged, metric-v1 baseline. Optional LangSmith score feedback when `LANGSMITH_TRACING`+key are set
 - Thresholds (0.85/0.80/0.70/0.75) are reported, not a gate. Context recall is ~1.0 by construction (retrieval returns every chunk)
 - Real smoke run (2 cases, 34 calls) worked; first numbers: faithfulness company 1.00, interviewer 0.88, **synthesis 0.54-0.57** (the weak spot ADR section 5 predicted), relevancy 0.74-0.85. Judge `max_tokens` had to be 12000 (4096 truncated the faithfulness verdict JSON). No full 9-case baseline recorded yet. Eval unit tests are mocked and live in `tests/evals/`
 
@@ -121,7 +121,8 @@ pytest -x -q
 
 # Evals (real API calls, costs money; never in CI)
 cd backend && python -m evals.run --dry-run
-python -m evals.run --cases 2 --web-cache record --label my-change
+python -m evals.run --limit 2 --web-cache record --label my-change   # real run; caches briefings
+python -m evals.run --rescore --metrics faithfulness --limit 4         # judge only, reuses cached briefings
 python -m evals.compare evals/results/A.json evals/results/B.json
 
 # Frontend

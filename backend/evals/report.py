@@ -166,9 +166,19 @@ def format_table(results: dict[str, Any]) -> str:
             "NOTE: judge model equals agent model (self-grading); scores are likely "
             "optimistic."
         )
+    if meta.get("config", {}).get("rescore"):
+        lines.append("NOTE: rescored from cached briefings (pipeline not re-run).")
     if meta.get("truncated"):
         lines.append("NOTE: run truncated by the LLM call cap; results are partial.")
-    head = f"{'case':<28}" + "".join(f"{SHORT[m]:>9}" for m in TABLE_METRICS)
+    selected = meta.get("config", {}).get("metrics")
+    cols = tuple(
+        m
+        for m in TABLE_METRICS
+        if selected is None
+        or m in selected
+        or (m == "faithfulness" and any(x.startswith("faithfulness") for x in selected))
+    )
+    head = f"{'case':<28}" + "".join(f"{SHORT[m]:>9}" for m in cols)
     lines += [head, "-" * len(head)]
     for case in results["cases"]:
         row = f"{case['id']:<28}"
@@ -181,7 +191,7 @@ def format_table(results: dict[str, Any]) -> str:
         lines.append(row)
     lines.append("-" * len(head))
     mean_row = f"{'mean':<28}"
-    for m in TABLE_METRICS:
+    for m in cols:
         mean_row += f"{_fmt(results['summary'][m]['mean'], m):>9}"
     lines.append(mean_row)
     lines.append("('!' = below starting threshold; '-' = not scored)")

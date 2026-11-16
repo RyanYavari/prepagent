@@ -106,10 +106,54 @@ def test_thresholds():
 
 def test_judge_model_env_and_self_grading(monkeypatch):
     monkeypatch.delenv("JUDGE_MODEL", raising=False)
-    model, same = resolve_judge_model("claude-sonnet-5-5")
-    assert model != "claude-sonnet-5-5" and not same
-    monkeypatch.setenv("JUDGE_MODEL", "claude-sonnet-5-5")
+    # default is the cheaper Sonnet-class model; it equals the default agent model,
+    # so a default run is flagged self-grading
     assert resolve_judge_model("claude-sonnet-5-5") == ("claude-sonnet-5-5", True)
+    assert resolve_judge_model("some-other-agent") == ("claude-sonnet-5-5", False)
+    monkeypatch.setenv("JUDGE_MODEL", "claude-opus-5-5")
+    assert resolve_judge_model("claude-sonnet-5-5") == ("claude-opus-5-5", False)
+
+
+def test_unselected_metrics_make_no_scorer_calls():
+    seen = []
+
+    async def scorer(sample):
+        seen.append(sample.metric)
+        return 0.9
+
+    out = score_case(collected(), scorer, ["faithfulness_company"])
+    assert seen == ["faithfulness_company"]
+    assert out.scores["answer_relevancy"] is None
+    assert out.scores["faithfulness"] == 0.9
+
+
+def test_answer_relevancy_embeddings_are_lazy(monkeypatch):
+    import asyncio
+
+    from evals import score as score_mod
+    from evals.samples import Sample
+
+    built = []
+    monkeypatch.setattr(score_mod, "make_judge", lambda m, b: object())
+    monkeypatch.setattr(
+        score_mod, "make_embeddings", lambda m: built.append(m) or object()
+    )
+    import ragas.metrics.collections as coll
+
+    class FakeFaith:
+        def __init__(self, llm):
+            pass
+
+        async def ascore(self, **k):
+            return type("R", (), {"value": 1.0})()
+
+    monkeypatch.setattr(coll, "Faithfulness", FakeFaith)
+    monkeypatch.setattr(coll, "AnswerRelevancy", lambda **k: None)
+    monkeypatch.setattr(coll, "ContextPrecisionWithReference", lambda **k: None)
+    monkeypatch.setattr(coll, "ContextRecall", lambda **k: None)
+    scorer = score_mod.make_ragas_scorer("j", "e", CallBudget(5))
+    asyncio.run(scorer(Sample("faithfulness_company", "q", "r", ["c"])))
+    assert built == []  # no OpenAI client needed for a faithfulness-only run
 
 
 def test_judge_charges_budget_before_calling(monkeypatch):

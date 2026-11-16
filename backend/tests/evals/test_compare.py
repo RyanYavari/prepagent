@@ -121,3 +121,13 @@ def test_terminal_table_and_summary_include_new_metrics():
     table = format_table(results)
     assert "f.s.all" in table and "f.presc" in table
     assert results["summary"]["faithfulness_synthesis_all"]["mean"] == 0.6
+
+
+def test_judge_change_gets_a_loud_not_comparable_warning():
+    a = run()
+    b = copy.deepcopy(a)
+    b["meta"]["config"]["judge_model"] = "j2"
+    out = compare(a, b)
+    assert "WARNING: judge model changed" in out and "NOT comparable" in out
+    same = compare(a, copy.deepcopy(a))
+    assert "WARNING: judge model changed" not in same

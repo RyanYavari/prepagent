@@ -244,3 +244,20 @@ Judge calls were 14-15 per case plus 2 for the prior diagnostic; pipeline 3 per 
 - Cost: about 5 more judge calls per case (all: 2, prescriptive: 3); preflight estimate is now 27 calls per case.
 
 **Caveats.** The extraction step is itself LLM work and can drop or soften a claim, so `faithfulness_prescriptive` is a less strict measure than the factual score and should be read as "are the facts behind the advice supported". The metric is not a gate and v1 vs v2 numbers are not directly comparable except `faithfulness_synthesis_all`.
+
+## Cost controls v3 (2026-11-15)
+**Why.** A full 9-case run cost roughly 200 LLM calls, with an Opus judge, and had to be repeated whenever scoring changed, because every run re-ran the pipeline. Context recall (about 1.0 by construction) was paid for by default.
+
+**Flags (`python -m evals.run`).**
+- `--limit N` runs the first N cases (default 3); `--cases id1,id2` runs the listed ids in order; `--all` runs every case. (Replaces the old `--cases N` and `--ids`.)
+- `--metrics a,b,c` selects metrics; `faithfulness` expands to company, interviewer and synthesis. Default set: every metric **except** `context_recall` and the `faithfulness_synthesis_with_prior` diagnostic, which are opt-in (name them to enable). Unselected metrics make no judge calls and show `-`. Selected metrics are recorded in `meta.config.metrics`; the table shows only those columns.
+- `--rescore` reuses cached briefings and calls only the judge: no pipeline, no Tavily, and OpenAI is needed only if `answer_relevancy` is selected. A missing or stale cache entry becomes a `BriefingCacheMiss` case error (never a silent pipeline run). `meta.config.agent_model` and `prompt_hashes` are taken from the cache entries, not the current code, so `compare` still shows which prompts produced the briefings.
+- `--dry-run` prints the plan without any call.
+
+**Pipeline-output cache.** Every normal run saves each successful case to `backend/evals/cache/briefings/<case-id>.json` (gitignored): briefing sections, the web/resume/prior contexts it is scored against, the generating agent model and prompt hashes, and a hash of the case definition. A changed case makes its entry stale. Errored cases are not cached.
+
+**Preflight.** Before any call the run prints the plan: per-model estimated LLM calls (pipeline vs judge, per metric and per case shape: interviewer, resume chunk count, prior briefings), Tavily and embedding counts, and a rough dollar figure (6000 input / 900 output tokens per call at list prices in `evals/plan.py`; an order of magnitude, not a quote). It **refuses to start** when the estimate exceeds `--max-llm-calls` (default 150). There is no `--force`; raise the cap explicitly. The runtime cap still stops a run mid-way as before.
+
+**Judge default.** `JUDGE_MODEL` now defaults to `claude-sonnet-5-5` (was `claude-opus-5-5`). That equals the default `AGENT_MODEL`, so default runs are flagged self-grading (scores optimistic; see Decisions #6). Set `JUDGE_MODEL=claude-opus-5-5` (or `claude-haiku-5-5` for the cheapest) to change it.
+
+**Changing the judge invalidates comparisons.** Every score depends on the judge model, so results from different judges, and from different metric versions, are not comparable. `compare` prints a loud "NOT comparable" warning when `judge_model` or `metric_version` differ, and the differing fields are listed. `evals/baselines/golden_v1.json` is the **Opus-judged, metric v1** baseline and is labelled `opus-judge-metric-v1` in its meta; a new baseline is needed for Sonnet-judged metric v2 runs.
