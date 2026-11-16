@@ -26,11 +26,11 @@ The output is a 4-section briefing: company intelligence, interviewer profile, y
 
 **Observability:** LangSmith 
 
-**Evals:** RAGAS 
+**Evals:** RAGAS (offline harness built; see [Evaluation](#evaluation))
 
-**Integrations:** Google OAuth (built); Gmail, Google Calendar, and Google Drive MCP )
+**Integrations:** Google OAuth and Google Calendar interview detection (built, via the Calendar API directly rather than MCP); Gmail and Google Drive (planned)
 
-**Infrastructure:** Docker Compose and GitHub Actions CI (built); AWS EC2 / Vercel deployment 
+**Infrastructure:** Docker Compose and GitHub Actions CI (built); AWS EC2 / Vercel deployment (planned)
 
 ## Target Architecture
 
@@ -47,7 +47,7 @@ LangGraph DAG
     ↓
     └── Synthesis Agent (Claude Sonnet)
     ↓
-Gmail MCP + Google Calendar MCP + Google Drive MCP
+Gmail MCP + Google Drive MCP (planned) + Google Calendar (built, direct API)
 Supabase PostgreSQL
 LangSmith Tracing
 ```
@@ -127,13 +127,71 @@ Full reasoning is in [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) and 
 
 Spec-first (Given/When/Then acceptance criteria in `specs/`), tests written before implementation, and conventional commits.
 
-## Evaluation 
+## Evaluation
 
-PrepAgent will use RAGAS to evaluate briefing quality across 3 metrics:
+Briefing quality is measured offline with [RAGAS](https://docs.ragas.io), through a harness in `backend/evals/` (spec: [specs/ragas-eval-harness.md](specs/ragas-eval-harness.md)). It is not part of CI or the normal test suite: it makes real API calls.
 
-- **Answer relevance** — does the briefing address this specific role and company
-- **Faithfulness** — are talking points grounded in what the research actually found
-- **Context precision** — is the retrieved context from pgvector useful for this briefing
+### What is measured
+
+The harness runs the real LangGraph pipeline over a small golden set of synthetic resumes and public companies (9 cases in `backend/evals/golden_v1.json`, no real personal data) and scores each generated briefing:
+
+- **Faithfulness** — are the claims supported by the web results and resume chunks the pipeline actually had. Reported per group: company overview, interviewer profile, and synthesis. Synthesis is split in two (see below).
+- **Answer relevancy** — does the briefing address this specific role and company.
+- **Context precision** — are the retrieved resume chunks useful for the briefing. (Context recall is available but opt-in: retrieval returns every chunk, so it is about 1.0 by construction.)
+
+Prior-briefing chunks are never counted as context, because the synthesis prompt cannot cite them.
+
+### How to run it
+
+```bash
+source backend/venv/bin/activate && cd backend
+python -m evals.run --dry-run --limit 4                     # print the per-model call estimate; no calls
+python -m evals.run --limit 4 --web-cache record --label x  # real run: costs money, caches the briefings
+python -m evals.run --rescore --metrics faithfulness --limit 4   # judge only, reuses cached briefings
+python -m evals.compare evals/results/A.json evals/results/B.json
+```
+
+Useful controls: `--limit N` / `--cases id1,id2` / `--all`, `--metrics` to choose what is scored, a preflight that refuses to start above `--max-llm-calls`, and `JUDGE_MODEL` to choose the judge (default `claude-sonnet-5-5`). Needs `ANTHROPIC_API_KEY`, `TAVILY_API_KEY` (not for web-cache replay) and `OPENAI_API_KEY` (answer-relevancy embeddings). Rough cost for 4 cases with the default judge is about $1.50 for a full run.
+
+### Results
+
+Committed scores-only snapshots are in `backend/evals/baselines/`. Both runs below use the same 4 cases (the first four golden cases), the Sonnet judge, and metric definitions v2. The hedged run scored only the two synthesis metrics, so the other metrics are marked "not run" rather than assumed.
+
+| Metric (mean over 4 cases) | Baseline (synthesis prompt `228b958d479e`) | After hedging prompt (`f7be121b67df`) |
+|---|---|---|
+| Faithfulness, company overview | 0.99 | not run |
+| Faithfulness, synthesis, factual fields (main) | 0.72 | 0.71 |
+| Faithfulness, synthesis, prescriptive fields | 0.79 | 0.77 |
+| Faithfulness, synthesis, all fields as written | 0.56 | not run |
+| Answer relevancy | 0.81 | not run |
+| Context precision | 0.72 | not run |
+| Faithfulness, interviewer profile | n/a (no case has an interviewer) | n/a |
+
+Per case, factual synthesis faithfulness was 0.67 / 0.87 / 0.76 / 0.57 for the baseline and 0.57 / 0.74 / 0.71 / 0.82 after the prompt change (Stripe / Shopify / Datadog / Mercury). The starting threshold for faithfulness is 0.85, so the baseline is below it.
+
+For reference only, `golden_v1.json` is an earlier baseline over all 9 cases scored by an Opus judge under the older v1 metric definitions (company 0.97, interviewer 0.91 on 2 cases, synthesis 0.64, answer relevancy 0.79, context precision 0.72, context recall 1.00). It is **not comparable** to the table above (different judge, different synthesis definition, different cases).
+
+### Key findings
+
+- **The first synthesis faithfulness score was mostly measuring wording.** It scored every synthesis field as written, including talking points, stories and conversation starters. A claim-level audit of that run found that most claims the judge marked unsupported were advice phrasing ("one talking point is to..."), which no source can contain. The synthesis metric is now split: factual fields (role insights, shared interests) are scored as written, and prescriptive fields are scored on the facts they rely on. The old all-fields score is kept as a separate metric. On the Sonnet-judged baseline the three read 0.72 (factual), 0.79 (prescriptive) and 0.56 (all fields as written).
+- **A synthesis-prompt change that hedges inferred claims showed no measurable change.** The prompt now asks for inferred requirements and connections to be phrased as hedged inferences tied to a specific fact. On 4 cases, factual synthesis faithfulness went from 0.72 to 0.71 and prescriptive from 0.79 to 0.77, with per-case swings of -0.13 to +0.25 in both directions. That is within what a single judge pass on 4 cases cannot distinguish from noise, so the change is neither confirmed nor ruled out. Answer relevancy and context precision were not re-measured under the new prompt.
+- Faithfulness of the company overview is high (0.99 on 4 cases); the weakest area is synthesis.
+
+### Limitations
+
+- **Only 4 cases** (the first four of 9), none with an interviewer, so interviewer faithfulness is unscored and nothing here exercises the no-resume or fictional-interviewer cases.
+- **Single judge pass, no repeats.** Judge variance has not been measured, and each run regenerated the briefings, so differences between runs mix prompt effects with generation and judge randomness.
+- **The judge is the same model as the generator** (`claude-sonnet-5-5`), so scores are likely optimistic (self-preference). The harness flags such runs as self-grading.
+- **Results are not comparable to the Opus-judged `golden_v1.json` baseline**: a different judge and different metric definitions change every score.
+- The hedging run covered two metrics only, so its effect on relevancy and precision is unknown.
+- Context precision mostly reflects how relevant the resume is to the target, and context recall is about 1.0 by construction, because retrieval returns every chunk (ADR section 3).
+- Resumes and companies are synthetic or public; thresholds are starting baselines, not gates.
+
+### Planned
+
+- A full 9-case Sonnet-judged baseline, including interviewer cases.
+- Repeat runs to measure judge and generation noise.
+- A non-generator judge, validated against the Opus-scored baseline.
 
 ## License
 
