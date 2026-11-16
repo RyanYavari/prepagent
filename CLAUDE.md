@@ -83,15 +83,23 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - Migration `007_briefing_failure_reason.sql` adds `briefings.failure_reason`; optional for correctness (writes fall back to status-only when the column is missing). `BriefingResponse.failure_reason` is returned but the frontend does not show it yet
 - Not re-run against real services; tests are mocked. A straggler thread cannot be killed, it only stops at the next node boundary and is bounded by per-call timeouts
 
+### ✅ Complete (Week 3, RAGAS eval harness) — specs/ragas-eval-harness.md
+- `backend/evals/`: `python -m evals.run` (from backend/) runs `build_graph()` over `golden_v1.json` (9 synthetic cases, short resume-side `reference` fact lists; interviewers labelled `public_figure`/`fictional`), scores with ragas 0.4.3 collections metrics (faithfulness per company/interviewer/synthesis group, answer relevancy, context precision/recall) and writes `evals/results/<UTC>[-label].json` plus a terminal table. `python -m evals.compare A.json B.json` diffs two runs and lists every differing meta field (prompt hashes, models, dataset)
+- Harness-only seams, no production code changed: in-memory retrieval (no Supabase), wrapped `search_web` recording raw web results (+ `--web-cache record|replay`, gitignored `evals/cache/`), counted LLM calls. Prior-briefing chunks are never a scored context; they feed a with-prior faithfulness diagnostic
+- Controls: `--cases N` (default 3) / `--ids` / `--all`, `--max-llm-calls` (default 150, hard cap over pipeline + judge, partial results marked `truncated`), preflight estimate (22 calls/case), `--dry-run`, `--repeat`. Refuses under `CI`/pytest. Needs `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` (answer-relevancy embeddings), `TAVILY_API_KEY` (not for replay)
+- Judge model: `JUDGE_MODEL` (default `claude-opus-5-5`; if equal to `AGENT_MODEL` the run is flagged self-grading, scores optimistic). Optional LangSmith score feedback when `LANGSMITH_TRACING`+key are set
+- Thresholds (0.85/0.80/0.70/0.75) are reported, not a gate. Context recall is ~1.0 by construction (retrieval returns every chunk)
+- Real smoke run (2 cases, 34 calls) worked; first numbers: faithfulness company 1.00, interviewer 0.88, **synthesis 0.54-0.57** (the weak spot ADR section 5 predicted), relevancy 0.74-0.85. Judge `max_tokens` had to be 12000 (4096 truncated the faithfulness verdict JSON). No full 9-case baseline recorded yet. Eval unit tests are mocked and live in `tests/evals/`
+
 ### ❌ Not Started (Week 2+)
 - **supervisor.py** stays empty: fixed DAG, no supervisor
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
-- **RAGAS evaluation**: Not implemented
 
 ### Next Task
 1. **Manually verify the briefing viewer in a browser** (the calendar flow is already verified)
 2. Apply migrations 006 and 007 (007 optional), then smoke-test the chunk writer with real keys (run two briefings for one company)
-3. Next feature: spec it first with /spec (RAGAS evaluation per ADR §5 is the largest open item)
+3. Run the full eval (`python -m evals.run --all --web-cache record --label baseline`, ~200 calls) and save it as the baseline; investigate the low synthesis faithfulness (0.54-0.57)
+4. Next feature: spec it first with /spec
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet
@@ -110,6 +118,11 @@ cd backend && uvicorn main:app --reload
 ruff check . --fix
 ruff format .
 pytest -x -q
+
+# Evals (real API calls, costs money; never in CI)
+cd backend && python -m evals.run --dry-run
+python -m evals.run --cases 2 --web-cache record --label my-change
+python -m evals.compare evals/results/A.json evals/results/B.json
 
 # Frontend
 cd frontend && npm run dev

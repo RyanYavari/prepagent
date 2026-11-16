@@ -119,3 +119,28 @@ Sign-in uses Google only for identity: tokens stay in memory for the userinfo ca
 
 **Revisit when:**
 Sign-in itself needs offline access to a Google API.
+
+---
+
+## 2026-11-15 RAGAS eval harness: observe the real graph, exclude prior briefings from scored contexts
+
+**Status:** Accepted
+
+**Context:**
+ADR section 5 promised RAGAS scoring but nothing existed. The graph keeps only summaries and source URLs (not the raw web results), and retrieval returns every resume chunk plus same-company prior briefings, which synthesis may not cite.
+
+**Decision:**
+`backend/evals/` runs `build_graph()` directly over a synthetic golden set with harness-only seams (in-memory retrieval, recorded web results with optional record/replay cache, counted LLM calls). Scoring uses ragas 0.4.3 collections metrics through a custom judge on ChatAnthropic, with a hard LLM-call cap. Prior-briefing chunks are never a scored context; they feed a with-prior faithfulness diagnostic. Judge model is `JUDGE_MODEL` (default differs from the agent model; equal models are flagged as self-grading). Thresholds are reported, not enforced; evals never run in CI or pytest.
+
+**Alternatives considered:**
+- Count prior briefings as context: Rejected because an earlier hallucination would then validate a later claim.
+- Call `run_pipeline`: Rejected because it persists to Supabase and writes chunks.
+- Legacy `ragas.evaluate()`/`Dataset`: Rejected because 0.4.3 collections metrics are the maintained path and let every judge call be counted against the cap.
+- Same model as judge: Rejected as the default because of self-preference bias.
+
+**Tradeoffs:**
+- Pro: no production code changed, no user data touched, before/after runs comparable with cached web results
+- Con: context recall is about 1.0 by construction (retrieval returns all chunks) and precision mostly reflects the resume; the judge costs about 15 calls per case
+
+**Revisit when:**
+Retrieval becomes selective (top-k or reranked), or a prior-briefing citation format is introduced.
