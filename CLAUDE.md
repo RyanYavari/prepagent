@@ -109,6 +109,7 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - Task files (`specs/tasks-*.md`) get their "Run /review" boxes ticked only if a review actually ran for that slice. Don't leave them unchecked after the final review passes.
 - In zsh, a variable holding several file names (`F="a b"; ruff check $F`) is not split into separate arguments. Pass the files directly.
 - Mocked LLM tests don't catch API-level incompatibilities (forced `tool_choice` and `temperature` both 400'd on the real model while every mocked test passed). Before calling an agent done, run one real smoke call per agent: `RUN_LIVE_LLM_TESTS=1 pytest tests/test_llm.py -k live` plus the node itself with real keys.
+- Frontend work must be checked in a real browser (run backend + frontend, exercise the page) before it is called done. If that isn't possible, say explicitly that it is unverified. Lint, `tsc` and `npm run build` can all pass without the page ever running, so they don't count as verification.
 
 ## Known local issues
 - mypy 2.4.1 crashes with "INTERNAL ERROR" locally, even on untouched files, so type-checking can't be verified here; rely on CI. Pin not bumped yet.
