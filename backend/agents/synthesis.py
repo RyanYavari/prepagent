@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from agents.llm import structured_llm
+from agents.prompting import UNTRUSTED_RULE, untrusted_block
 from models.briefing import (
     BriefingSections,
     CompanyOverview,
@@ -51,7 +52,7 @@ SYSTEM_PROMPT = (
     "claim. Do not connect the candidate's experience to the company's needs unless "
     "both are present in the context. Prior briefings are background only and "
     "cannot be cited. Suggested questions are questions for the candidate to ask "
-    "and do not need citations. {interviewer_rule}"
+    "and do not need citations. {interviewer_rule} " + UNTRUSTED_RULE
 )
 INTERVIEWER_RULE_ON = (
     "Also fill shared_interests and conversation_starters from the interviewer "
@@ -100,21 +101,38 @@ def _generate(
     briefing_chunks: list[RetrievedChunk],
     include_interviewer: bool,
 ) -> SynthesisOutput:
-    parts = [f"Company: {company}"]
+    target = f"Company: {company}"
     if role:
-        parts.append(f"Role being interviewed for: {role}")
-    parts.append(f"Company research:\n{_format_company(company_research)}")
+        target += f"\nRole being interviewed for: {role}"
+    parts = [
+        untrusted_block("target", target),
+        untrusted_block(
+            "company_research",
+            f"Company research:\n{_format_company(company_research)}",
+        ),
+    ]
     if include_interviewer:
-        parts.append(f"Interviewer research:\n{_format_interviewer(interviewer)}")
+        parts.append(
+            untrusted_block(
+                "interviewer_research",
+                f"Interviewer research:\n{_format_interviewer(interviewer)}",
+            )
+        )
     parts.append(
-        "Candidate resume sections:\n" + _format_chunks(resume_chunks, True)
+        untrusted_block(
+            "resume",
+            "Candidate resume sections:\n" + _format_chunks(resume_chunks, True),
+        )
         if resume_chunks
         else "Candidate resume sections: (none on file)"
     )
     if briefing_chunks:
         parts.append(
-            "Prior briefings for this company (background only, not citable):\n"
-            + _format_chunks(briefing_chunks, False)
+            untrusted_block(
+                "prior_briefings",
+                "Prior briefings for this company (background only, not citable):\n"
+                + _format_chunks(briefing_chunks, False),
+            )
         )
 
     system = SYSTEM_PROMPT.format(

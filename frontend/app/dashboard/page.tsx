@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { CalendarPanel } from "@/components/CalendarPanel";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -94,6 +95,12 @@ export default function Dashboard() {
     router.push("/");
   };
 
+  const handleSessionExpired = useCallback(() => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("email");
+    router.push("/");
+  }, [router]);
+
   if (!email) {
     return (
       <main className="min-h-screen flex items-center justify-center">
@@ -117,6 +124,11 @@ export default function Dashboard() {
             Sign out
           </button>
         </div>
+
+        <CalendarPanel
+          onSessionExpired={handleSessionExpired}
+          onBriefingCreated={(id) => router.push(`/prep/${id}`)}
+        />
 
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">

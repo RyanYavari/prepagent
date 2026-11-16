@@ -11,6 +11,7 @@ a different person (section 6, failure mode 3).
 from typing import Any
 
 from agents.llm import structured_llm
+from agents.prompting import UNTRUSTED_RULE, bound_query, untrusted_block
 from models.briefing import InterviewerProfile
 from models.research import SearchResult
 from services.web_search import search_web
@@ -52,7 +53,7 @@ SYSTEM_PROMPT = (
     "tell, leave the fields empty rather than guessing. Every factual claim must "
     "come from those results; do not include claims the results do not support. "
     "Fill summary and background only; leave shared_interests and "
-    "conversation_starters empty."
+    "conversation_starters empty. " + UNTRUSTED_RULE
 )
 
 
@@ -73,8 +74,12 @@ def _summarize(
             ("system", SYSTEM_PROMPT),
             (
                 "human",
-                f"Interviewer: {interviewer}\nCompany: {company}\n{role_line}\n"
-                + f"Search results:\n{formatted}",
+                untrusted_block(
+                    "target",
+                    f"Interviewer: {interviewer}\nCompany: {company}\n{role_line}",
+                )
+                + "\n\n"
+                + untrusted_block("search_results", formatted),
             ),
         ]
     )
@@ -113,7 +118,9 @@ def interviewer_research_node(state: dict[str, Any]) -> dict[str, Any]:
     role = str(state.get("role") or "").strip() or None
 
     collected: dict[str, SearchResult] = {}
-    for query in _build_queries(interviewer, company, role)[:MAX_ATTEMPTS]:
+    for query in map(
+        bound_query, _build_queries(interviewer, company, role)[:MAX_ATTEMPTS]
+    ):
         for result in search_web(query):
             if _mentions(result, interviewer):
                 collected.setdefault(result.url, result)

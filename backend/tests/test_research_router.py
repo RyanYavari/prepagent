@@ -171,6 +171,31 @@ class TestCreateBriefingWithResume:
 
     @patch("routers.research.process_resume_embedding")
     @patch("routers.research._get_supabase")
+    def test_create_briefing_error_detail_does_not_leak_exception(
+        self,
+        mock_supabase_fn,
+        mock_process_resume,
+        client_with_auth,
+        mock_user_id,
+        caplog,
+    ):
+        """Raw exception text is logged server-side, never returned to the client."""
+        mock_supabase_fn.return_value = MagicMock()
+        mock_process_resume.side_effect = OpenAIError("secret-key-sk-123 rate limit")
+
+        with caplog.at_level("ERROR", logger="routers.research"):
+            response = client_with_auth.post(
+                "/briefings",
+                json={"company": "Acme Corp", "resume_text": "Resume content"},
+            )
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert response.json()["detail"] == "Embedding service temporarily unavailable"
+        assert "secret-key-sk-123" not in response.text
+        assert "secret-key-sk-123" in caplog.text
+
+    @patch("routers.research.process_resume_embedding")
+    @patch("routers.research._get_supabase")
     def test_create_briefing_missing_api_key_returns_500(
         self, mock_supabase_fn, mock_process_resume, client_with_auth, mock_user_id
     ):

@@ -35,6 +35,7 @@ psql "$SUPABASE_DATABASE_URL" -f supabase/migrations/002_resume_embeddings.sql
 
 - `002_resume_embeddings.sql` - Creates `resume_embeddings` table with pgvector support
 - `003_retrieval_metadata.sql` - Adds `company`, `role` columns and a case-insensitive company index for briefing-chunk retrieval
+- `004_calendar_integration.sql` - Adds `calendar_connections` (encrypted Calendar refresh token) and `calendar_detections` (unique per user + event, for dedupe); RLS on, server-only
 
 ## Verifying Migration
 

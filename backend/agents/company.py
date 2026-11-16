@@ -9,6 +9,7 @@ deterministic loop inside this node, not a supervisor decision.
 from typing import Any
 
 from agents.llm import structured_llm
+from agents.prompting import UNTRUSTED_RULE, bound_query, untrusted_block
 from models.briefing import CompanyOverview
 from models.research import SearchResult
 from services.web_search import search_web
@@ -23,7 +24,7 @@ SYSTEM_PROMPT = (
     "from those results; if the results do not support a claim, do not include it. "
     "Leave fields empty rather than guessing. Do not include claims about dates or "
     "events unless a result states them. Keep recent_news items short and note the "
-    "date when a result gives one."
+    "date when a result gives one. " + UNTRUSTED_RULE
 )
 
 
@@ -59,7 +60,9 @@ def _summarize(
             ("system", SYSTEM_PROMPT),
             (
                 "human",
-                f"Company: {company}\n{role_line}\nSearch results:\n{formatted}",
+                untrusted_block("target", f"Company: {company}\n{role_line}")
+                + "\n\n"
+                + untrusted_block("search_results", formatted),
             ),
         ]
     )
@@ -90,7 +93,7 @@ def company_research_node(state: dict[str, Any]) -> dict[str, Any]:
     role = str(state.get("role") or "").strip() or None
 
     collected: dict[str, SearchResult] = {}
-    for query in _build_queries(company, role)[:MAX_ATTEMPTS]:
+    for query in map(bound_query, _build_queries(company, role)[:MAX_ATTEMPTS]):
         for result in search_web(query):
             collected.setdefault(result.url, result)
         if len(collected) >= RETRY_THRESHOLD:

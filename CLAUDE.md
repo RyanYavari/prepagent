@@ -53,6 +53,18 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - Dashboard cards and /prep/new now link/redirect to the viewer
 - Frontend tests: vitest (`npm test`, runs in CI). **Polling/auth/404/navigation were never run in a browser** — manual checks in `specs/tasks-briefing-viewer.md` are still unticked
 
+### ✅ Complete (Week 3, Calendar interview detection) — specs/calendar-detection.md
+- Separate "Connect Calendar" consent (`GET /calendar/connect`, `POST /calendar/callback`): only `calendar.events.readonly`, `include_granted_scopes=false`, state bound to the JWT user; scope checked exactly on exchange. Redirect URI to register in Google Cloud: `${FRONTEND_URL}/calendar/callback` (`http://localhost:3000/calendar/callback` locally)
+- Refresh token Fernet-encrypted in `calendar_connections` (`TOKEN_ENCRYPTION_KEY`, fail closed); access tokens never stored; `invalid_grant` marks the connection `revoked`; `DELETE /calendar/connection` revokes at Google and deletes
+- `agents/calendar_detect.py`: classifier gate (no-tools structured extraction, sanitized fields, code-side `decide()`); **auto-run is OFF by default** (`CALENDAR_AUTO_CONFIDENCE_THRESHOLD` default 2; set e.g. 0.85 to enable), so every detection lands in the dashboard confirmation list
+- `services/calendar_sync.py`: on-demand polling (`POST /calendar/sync`, dashboard load) + optional interval loop (`CALENDAR_POLL_INTERVAL_MINUTES`, default off); dedupe via `UNIQUE (user_id, google_event_id)` claim-then-act
+- `services/briefings.py`: shared `create_pending_briefing` used by `POST /briefings` and calendar (the only action event text can trigger)
+- Downstream prompts (company, interviewer, synthesis) treat fields/search results as `<untrusted_data>`; `BriefingCreate` rejects URLs/markup/control chars in company/role/interviewer
+- Needs migration `004_calendar_integration.sql` applied, `TOKEN_ENCRYPTION_KEY`, Calendar API enabled + scope + redirect URI in Google Cloud. Testing-status OAuth apps expire refresh tokens after 7 days
+- Known limitations: rescheduled events don't update the existing briefing's date; only the first interviewer is researched
+- ADR 7 + §4 amendment in ARCHITECTURE_DECISIONS.md; /why entries in docs/decisions.md
+- **Frontend (CalendarPanel, /calendar/callback) was never run in a browser**: lint, tsc, build and vitest pass, but the connect round-trip, sync, confirm, dismiss and revoked states are unverified
+
 ### ❌ Not Started (Week 2+)
 - **supervisor.py** stays empty: fixed DAG, no supervisor
 - **Briefing chunk writer**: post-synthesis embedding of briefing sections (retrieval already reads them)
@@ -61,7 +73,9 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - Failure reason is not persisted (only `failed` status); a crash mid-run leaves the row `running`
 
 ### Next Task
-**Manually verify the briefing viewer** (run backend + frontend, create a briefing, watch it poll to complete), then the **briefing chunk writer** — spec it first with /spec
+1. Apply migration 004, set `TOKEN_ENCRYPTION_KEY`, configure Google Cloud, then **manually verify the calendar flow and the briefing viewer in a browser**
+2. **Follow-up spec (high priority): sign-in tokens.** `users.google_access_token` / `google_refresh_token` are stored in plaintext by `/auth/callback`; stop storing or encrypt them, and revoke old grants (gmail/drive/calendar granted before the scope trim)
+3. Briefing chunk writer — spec it first with /spec
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet
@@ -104,19 +118,22 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 
 ## What Claude gets wrong
 - Running `ruff format <dir>` then `git add -u` sweeps unrelated files into a commit. Format only the files you changed, and stage them by name.
+- The same goes for `ruff check --fix`: run it on the files you changed, not a directory (`ruff check --fix services` can rewrite files you never touched).
 
 - On macOS, `sed -i` needs an explicit backup-suffix argument (`sed -i ''`) and fails on multi-line edits. Use the Edit tool or a Python script instead.
 - Task files (`specs/tasks-*.md`) get their "Run /review" boxes ticked only if a review actually ran for that slice. Don't leave them unchecked after the final review passes.
 - In zsh, a variable holding several file names (`F="a b"; ruff check $F`) is not split into separate arguments. Pass the files directly.
 - Mocked LLM tests don't catch API-level incompatibilities (forced `tool_choice` and `temperature` both 400'd on the real model while every mocked test passed). Before calling an agent done, run one real smoke call per agent: `RUN_LIVE_LLM_TESTS=1 pytest tests/test_llm.py -k live` plus the node itself with real keys.
+- Frontend work must be checked in a real browser (run backend + frontend, exercise the page) before it is called done. If that isn't possible, say explicitly that it is unverified. Lint, `tsc` and `npm run build` can all pass without the page ever running, so they don't count as verification.
 
 ## Known local issues
-- mypy 2.4.1 crashes with "INTERNAL ERROR" locally, even on untouched files, so type-checking can't be verified here; rely on CI. Pin not bumped yet.
+- mypy 2.4.1 "INTERNAL ERROR" locally is an environment problem, not a type error: it writes its cache via `sqlite3`, and this machine's Homebrew Python can't load `libsqlite3.dylib`. Type errors are reported before the crash; for a clean exit code run `mypy . --ignore-missing-imports --cache-dir=/dev/null --no-sqlite-cache` from `backend/` (same command CI runs, plus the cache flags). Config is in `backend/mypy.ini`.
 
 ## Testing
 - pytest for backend, run with `pytest -x -q` from backend/
 - Test files go in backend/tests/ mirroring the source structure
 - Write failing tests first, then implement
+- For tests that need stateful DB behavior (unique constraints, insert-ignore upserts, conditional updates), reuse `FakeSupabase` in `backend/tests/calendar_helpers.py` instead of chaining `MagicMock` calls. It supports `select/insert/upsert/update/delete` with `eq`/`neq` filters and enforces the `UNIQUE_KEYS` per table; add a table's unique key there when a test depends on it.
 
 ## Non-obvious gotchas
 - All agents get their LLM from `agents/llm.py` (`structured_llm`): `AGENT_MODEL` env var (default `claude-sonnet-5-5`), `method="json_schema"` for structured output, and no `temperature` (the model returns 400 for forced `tool_choice` and for `temperature`)

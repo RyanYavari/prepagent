@@ -44,7 +44,9 @@ def test_structured_output_avoids_forced_tool_choice():
     )
 
 
-@pytest.mark.parametrize("module", ["company", "interviewer", "synthesis"])
+@pytest.mark.parametrize(
+    "module", ["company", "interviewer", "synthesis", "calendar_detect"]
+)
 def test_agents_use_shared_helper_not_own_model(module):
     import importlib
 
