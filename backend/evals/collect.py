@@ -168,6 +168,7 @@ def collect_case(
                     "company": case.company,
                     "interviewer": case.interviewer,
                     "role": case.role,
+                    "job_description": case.job_description,
                     "warnings": [],
                 },
                 config={

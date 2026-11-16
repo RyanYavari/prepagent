@@ -100,3 +100,34 @@ def test_shipped_golden_dataset_is_valid():
     assert {"public_figure", "fictional", None} <= kinds
     assert any(c.resume_text is None for c in ds.cases)
     assert any(c.prior_briefings for c in ds.cases)
+
+
+def test_golden_v1_is_unchanged_and_has_no_jd():
+    from evals.dataset import DEFAULT_PATH
+
+    # the hash recorded in the committed baselines: golden_v1.json must never be edited
+    assert (
+        load_dataset(DEFAULT_PATH).sha256
+        == "01e47019627708f3da077c6f935cbec8408d6fac86c3e459358cf07c66c2b444"
+    )
+    assert not any(c.job_description for c in load_dataset(DEFAULT_PATH).cases)
+
+
+def test_committed_baselines_are_scores_only_and_jd_snapshots_match_golden_v2():
+    from evals.dataset import DEFAULT_PATH
+
+    base = DEFAULT_PATH.parent / "baselines"
+    v2_sha = load_dataset(DEFAULT_PATH.parent / "golden_v2.json").sha256
+    for path in base.glob("*.json"):
+        data = json.loads(path.read_text())
+        for case in data["cases"]:
+            assert not {"contexts", "answer", "answers"} & set(case), path.name
+    for mode in ("off", "on"):
+        snap = json.loads(
+            (base / f"golden_v2_sonnet_metric_v2_jd_{mode}.json").read_text()
+        )
+        assert snap["meta"]["baseline_label"] == "sonnet-judge-metric-v2-jd-spike"
+        assert snap["meta"]["cases_run"] == 3 and len(snap["cases"]) == 3
+        assert snap["meta"]["config"]["jd_mode"] == mode
+        # the snapshot was scored on exactly the golden_v2.json in the repo
+        assert snap["meta"]["dataset_sha256"] == v2_sha

@@ -1,0 +1,216 @@
+{
+ "meta": {
+  "dataset_version": "v2-jd-spike",
+  "dataset_sha256": "180f3b52d7c2369d45016e3d6aa22b71c5971de24414772ce7f8b648d8c582d1",
+  "config": {
+   "agent_model": "claude-sonnet-5-5",
+   "judge_model": "claude-sonnet-5-5",
+   "embedding_model": "text-embedding-3-small",
+   "self_grading": true,
+   "ragas_version": "0.4.3",
+   "metric_version": 2,
+   "metrics": [
+    "faithfulness_synthesis",
+    "faithfulness_prescriptive"
+   ],
+   "rescore": false,
+   "prompt_hashes": {
+    "company": "1b541070a6cf",
+    "interviewer": "250c3b7e53c8",
+    "synthesis": "f7be121b67df"
+   },
+   "retrieval_mode": "in_memory",
+   "web_cache": "replay",
+   "jd_mode": "on",
+   "jd_cases": 3
+  },
+  "git": {
+   "sha": "0d0bce3",
+   "dirty": true
+  },
+  "baseline_label": "sonnet-judge-metric-v2-jd-spike",
+  "variant": "jd-on (synthesis prompt f7be121b67df, golden_v2 JD on)",
+  "note": "LABEL: scored by claude-sonnet-5-5 (equal to the generating model, so self-grading and likely optimistic) under metric_version 2, on 3 golden_v2 cases (stripe-backend-01, datadog-sre-01, mercury-ambiguous-01; none has an interviewer), single judge pass, same recorded web results (--web-cache replay) for the jd-off and jd-on runs. The job descriptions are clean, generic synthetic ones, so this is a best case, not a typical posting. Metrics scored: faithfulness_synthesis, faithfulness_prescriptive; every other metric is null (not run). Run on commit 0d0bce3 with the uncommitted spike code (git.dirty is true). Not comparable to golden_v1.json (Opus judge, metric v1, 9 cases) or to the 4-case golden_v1 Sonnet snapshots (different cases). Scores only: no contexts or answers.",
+  "source_runs": [
+   "20261116T044106Z"
+  ],
+  "cases_run": 3,
+  "judge_model": "claude-sonnet-5-5",
+  "jd_mode": "on"
+ },
+ "cases": [
+  {
+   "id": "stripe-backend-01",
+   "tags": [
+    "no-interviewer",
+    "payments"
+   ],
+   "interviewer_kind": null,
+   "scores": {
+    "faithfulness_company": null,
+    "faithfulness_interviewer": null,
+    "faithfulness_synthesis": 1.0,
+    "faithfulness_synthesis_all": null,
+    "faithfulness_prescriptive": 1.0,
+    "answer_relevancy": null,
+    "context_precision": null,
+    "context_recall": null,
+    "faithfulness": 1.0
+   },
+   "score_errors": {},
+   "diagnostics": {
+    "prior_briefing_chunk_count": 0,
+    "faithfulness_synthesis_with_prior": null,
+    "prior_faithfulness_delta": null
+   },
+   "thresholds_met": {
+    "faithfulness_company": null,
+    "faithfulness_interviewer": null,
+    "faithfulness_synthesis": true,
+    "faithfulness_synthesis_all": null,
+    "faithfulness_prescriptive": true,
+    "answer_relevancy": null,
+    "context_precision": null,
+    "context_recall": null,
+    "faithfulness": true
+   }
+  },
+  {
+   "id": "datadog-sre-01",
+   "tags": [
+    "no-interviewer",
+    "observability"
+   ],
+   "interviewer_kind": null,
+   "scores": {
+    "faithfulness_company": null,
+    "faithfulness_interviewer": null,
+    "faithfulness_synthesis": 1.0,
+    "faithfulness_synthesis_all": null,
+    "faithfulness_prescriptive": 0.7333,
+    "answer_relevancy": null,
+    "context_precision": null,
+    "context_recall": null,
+    "faithfulness": 1.0
+   },
+   "score_errors": {},
+   "diagnostics": {
+    "prior_briefing_chunk_count": 1,
+    "faithfulness_synthesis_with_prior": null,
+    "prior_faithfulness_delta": null
+   },
+   "thresholds_met": {
+    "faithfulness_company": null,
+    "faithfulness_interviewer": null,
+    "faithfulness_synthesis": true,
+    "faithfulness_synthesis_all": null,
+    "faithfulness_prescriptive": false,
+    "answer_relevancy": null,
+    "context_precision": null,
+    "context_recall": null,
+    "faithfulness": true
+   }
+  },
+  {
+   "id": "mercury-ambiguous-01",
+   "tags": [
+    "no-interviewer",
+    "ambiguous-company"
+   ],
+   "interviewer_kind": null,
+   "scores": {
+    "faithfulness_company": null,
+    "faithfulness_interviewer": null,
+    "faithfulness_synthesis": 0.9722,
+    "faithfulness_synthesis_all": null,
+    "faithfulness_prescriptive": 1.0,
+    "answer_relevancy": null,
+    "context_precision": null,
+    "context_recall": null,
+    "faithfulness": 0.9722
+   },
+   "score_errors": {},
+   "diagnostics": {
+    "prior_briefing_chunk_count": 0,
+    "faithfulness_synthesis_with_prior": null,
+    "prior_faithfulness_delta": null
+   },
+   "thresholds_met": {
+    "faithfulness_company": null,
+    "faithfulness_interviewer": null,
+    "faithfulness_synthesis": true,
+    "faithfulness_synthesis_all": null,
+    "faithfulness_prescriptive": true,
+    "answer_relevancy": null,
+    "context_precision": null,
+    "context_recall": null,
+    "faithfulness": true
+   }
+  }
+ ],
+ "summary": {
+  "faithfulness_company": {
+   "mean": null,
+   "min": null,
+   "n": 0,
+   "threshold": 0.85,
+   "below_threshold_count": 0
+  },
+  "faithfulness_interviewer": {
+   "mean": null,
+   "min": null,
+   "n": 0,
+   "threshold": 0.85,
+   "below_threshold_count": 0
+  },
+  "faithfulness_synthesis": {
+   "mean": 0.9907,
+   "min": 0.9722,
+   "n": 3,
+   "threshold": 0.85,
+   "below_threshold_count": 0
+  },
+  "faithfulness_synthesis_all": {
+   "mean": null,
+   "min": null,
+   "n": 0,
+   "threshold": 0.85,
+   "below_threshold_count": 0
+  },
+  "faithfulness_prescriptive": {
+   "mean": 0.9111,
+   "min": 0.7333,
+   "n": 3,
+   "threshold": 0.85,
+   "below_threshold_count": 1
+  },
+  "answer_relevancy": {
+   "mean": null,
+   "min": null,
+   "n": 0,
+   "threshold": 0.8,
+   "below_threshold_count": 0
+  },
+  "context_precision": {
+   "mean": null,
+   "min": null,
+   "n": 0,
+   "threshold": 0.7,
+   "below_threshold_count": 0
+  },
+  "context_recall": {
+   "mean": null,
+   "min": null,
+   "n": 0,
+   "threshold": 0.75,
+   "below_threshold_count": 0
+  },
+  "faithfulness": {
+   "mean": 0.9907,
+   "min": 0.9722,
+   "n": 3,
+   "threshold": 0.85,
+   "below_threshold_count": 0
+  }
+ }
+}

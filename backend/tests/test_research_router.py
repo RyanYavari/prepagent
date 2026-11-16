@@ -378,6 +378,7 @@ class TestCreateBriefingTriggersPipeline:
             company="Stripe",
             interviewer="Jane Doe",
             role="Engineer",
+            job_description=None,
         )
 
     @patch("routers.research.run_pipeline")

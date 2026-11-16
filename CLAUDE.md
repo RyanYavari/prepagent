@@ -91,6 +91,15 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - Thresholds (0.85/0.80/0.70/0.75) are reported, not a gate. Context recall is ~1.0 by construction (retrieval returns every chunk)
 - Real smoke run (2 cases, 34 calls) worked; first numbers: faithfulness company 1.00, interviewer 0.88, **synthesis 0.54-0.57** (the weak spot ADR section 5 predicted), relevancy 0.74-0.85. Judge `max_tokens` had to be 12000 (4096 truncated the faithfulness verdict JSON). No full 9-case baseline recorded yet. Eval unit tests are mocked and live in `tests/evals/`
 
+### ✅ Complete (Week 3, Job description input) — specs/job-description-input.md
+- `BriefingCreate.job_description` (optional, `max_length=12_000`, over the limit is a 422, never truncated; `clean_long_text` in `models/text_safety.py` strips control/format chars, keeps URLs and `<>{}`). Whitespace-only becomes `None`. `main.py` validation handler drops `input` from errors for this field only
+- **Request-scoped: never stored, logged, put in run metadata, or embedded.** No migration. Flows `create_pending_briefing` -> `run_pipeline(job_description=...)` -> `PipelineState.job_description` -> `synthesis_node` only (company/interviewer nodes never see it). `write_briefing_chunks` has no JD parameter. Calendar briefings never carry one (`briefing_fields` has no JD input)
+- Synthesis: JD goes in `untrusted_block("job_description", ...)`; with a JD the "No job description is provided" sentence is swapped for `JD_SENTENCE` (requirements must come from it and end with `[JD]`); with no JD the prompt is byte-identical (synthesis hash `f7be121b67df`). `UNTRUSTED_RULE` is deliberately unchanged. `[JD]` is a bare tag valid only when a JD was supplied; with a JD every `key_requirements` item must carry it or is dropped (counted in the existing "Removed N" warning); a JD alone counts as usable context
+- Viewer: `[JD]` renders a "Job description" chip (`lib/citations.ts`, `CitedText.tsx`) and the Key requirements heading gets a "From job description" label; `/prep/new` has the textarea with a counter (no `maxLength`, so a paste is never silently truncated; submit blocked over 12,000; `lib/briefingForm.ts`)
+- Evals: `golden_v2.json` = v1 + synthetic JDs on stripe/datadog/mercury (**never edit it: its sha256 `180f3b52...` is recorded in the baselines**; `golden_v1.json` is also untouched), `--jd on|off` (default on; `off` strips the JD), JD is a scored context for the three synthesis faithfulness groups only, cache file gets a `-jd` suffix so the two arms do not overwrite each other. Committed snapshots `evals/baselines/golden_v2_sonnet_metric_v2_jd_{off,on}.json` (label `sonnet-judge-metric-v2-jd-spike`): factual synthesis faithfulness 0.56 -> 0.99, prescriptive 0.74 -> 0.91, 29/29 `key_requirements` tagged, 0 dropped. 3 clean synthetic JDs, self-graded: a best case, not a real-posting result
+- With `LANGSMITH_TRACING` on, the synthesis prompt (JD included) goes to LangSmith, as the resume does. Paraphrased requirements are stored in `content` and embedded as same-company prior briefings (background only); a later briefing for a different role could be nudged by them
+- **Not verified yet:** the `/prep/new` form and the viewer indicator in a real browser, and a live synthesis smoke call with a JD through the real API path (the eval ran the synthesis node via the harness, not POST /briefings)
+
 ### ❌ Not Started (Week 2+)
 - **supervisor.py** stays empty: fixed DAG, no supervisor
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
@@ -98,8 +107,9 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 ### Next Task
 1. **Manually verify the briefing viewer in a browser** (the calendar flow is already verified)
 2. Apply migrations 006 and 007 (007 optional), then smoke-test the chunk writer with real keys (run two briefings for one company)
-3. Run the full eval (`python -m evals.run --all --web-cache record --label baseline`, ~200 calls) and save it as the baseline; investigate the low synthesis faithfulness (0.54-0.57)
-4. Next feature: spec it first with /spec
+3. Verify the job description form and viewer in a browser, and run a live smoke call through POST /briefings with a JD
+4. Run the full eval (`python -m evals.run --all --web-cache record --label baseline`, ~200 calls) and save it as the baseline; investigate the low synthesis faithfulness (0.54-0.57)
+5. Next feature: spec it first with /spec
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet

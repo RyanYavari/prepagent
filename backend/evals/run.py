@@ -77,6 +77,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="reuse cached briefings (no pipeline, no Tavily) and only call the judge",
     )
+    p.add_argument(
+        "--jd",
+        choices=["on", "off"],
+        default="on",
+        help="`off` drops each case's job_description (same cases, "
+        "no JD) so runs with and without it can be compared",
+    )
     p.add_argument("--max-llm-calls", type=int, default=DEFAULT_MAX_LLM_CALLS)
     p.add_argument(
         "--dry-run",
@@ -112,6 +119,12 @@ def select_cases(cases: list[GoldenCase], args: argparse.Namespace) -> list[Gold
     return cases[: max(limit, 0)]
 
 
+def apply_jd_mode(cases: list[GoldenCase], mode: str) -> list[GoldenCase]:
+    if mode == "off":
+        return [c.model_copy(update={"job_description": None}) for c in cases]
+    return cases
+
+
 def missing_env(web_cache: str, rescore: bool, metrics: tuple[str, ...]) -> list[str]:
     needed = ["ANTHROPIC_API_KEY"]  # the judge always needs it
     if "answer_relevancy" in metrics:
@@ -133,7 +146,7 @@ def run(
     guard_environment()
     metrics = parse_metrics(args.metrics)
     dataset = load_dataset(args.dataset)
-    selected = select_cases(dataset.cases, args)
+    selected = apply_jd_mode(select_cases(dataset.cases, args), args.jd)
 
     from agents.llm import get_model_name
 
@@ -301,6 +314,8 @@ def _run_once(
             "prompt_hashes": gen_hashes,
             "retrieval_mode": "in_memory",
             "web_cache": args.web_cache,
+            "jd_mode": args.jd,
+            "jd_cases": sum(1 for c in selected if c.job_description),
         },
     )
     path = write_results(results, args.results_dir)

@@ -27,7 +27,8 @@ def create_pending_briefing(
 
     `start_pipeline(**kwargs)` is supplied by the caller (typically
     `partial(background_tasks.add_task, run_pipeline)`). resume_text is not
-    handled here; callers that accept it embed it first.
+    handled here; callers that accept it embed it first. `fields.job_description` is
+    request-scoped: it goes to the pipeline as an argument and is never inserted.
 
     Raises whatever the insert raises; callers map that to a generic error.
     """
@@ -48,6 +49,7 @@ def create_pending_briefing(
         company=briefing["company"],
         interviewer=briefing.get("interviewer"),
         role=briefing.get("role"),
+        job_description=fields.job_description,
     )
     return briefing
 

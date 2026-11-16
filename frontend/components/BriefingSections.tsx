@@ -1,20 +1,35 @@
 import type { ReactNode } from "react";
 import type { BriefingContent } from "@/lib/briefing";
+import { parseCitations } from "@/lib/citations";
 import { CitedText, SourceLink } from "./CitedText";
+
+// True when at least one item was grounded in the pasted job description.
+function fromJobDescription(items: string[]): boolean {
+  return items.some((item) => parseCitations(item).some((s) => s.type === "jd"));
+}
 
 function List({
   title,
   items,
   flagUnsourced = false,
+  jobDescriptionNote = false,
 }: {
   title: string;
   items: string[];
   flagUnsourced?: boolean;
+  jobDescriptionNote?: boolean;
 }) {
   if (items.length === 0) return null;
   return (
     <div className="mb-4">
-      <h4 className="text-sm font-semibold text-gray-700 mb-1">{title}</h4>
+      <h4 className="text-sm font-semibold text-gray-700 mb-1">
+        {title}
+        {jobDescriptionNote && (
+          <span className="ml-2 align-middle px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-normal">
+            From job description
+          </span>
+        )}
+      </h4>
       <ul className="list-disc pl-5 space-y-1 text-gray-800">
         {items.map((item, i) => (
           <li key={i}>
@@ -161,7 +176,12 @@ export function BriefingSections({
       </Section>
 
       <Section title="Role Insights" empty={roleEmpty}>
-        <List title="Key requirements" items={r.key_requirements} flagUnsourced />
+        <List
+          title="Key requirements"
+          items={r.key_requirements}
+          flagUnsourced
+          jobDescriptionNote={fromJobDescription(r.key_requirements)}
+        />
         <List title="Resume alignment" items={r.resume_alignment} flagUnsourced />
         <List title="Potential gaps" items={r.potential_gaps} flagUnsourced />
         <Sources urls={r.sources} />

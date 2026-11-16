@@ -40,17 +40,18 @@ class GoldenCase(BaseModel):
     interviewer: str | None = None
     interviewer_kind: Literal["public_figure", "fictional"] | None = None
     resume_text: str | None = None
+    job_description: str | None = None  # synthetic JD (specs/job-description-input.md)
     prior_briefings: list[PriorBriefing] = Field(default_factory=list)
     reference: list[str] = Field(min_length=1)
     tags: list[str] = Field(default_factory=list)
 
-    @field_validator("resume_text")
+    @field_validator("resume_text", "job_description")
     @classmethod
     def _no_contact_details(cls, value: str | None) -> str | None:
         if value and (
             _EMAIL.search(value) or _PHONE.search(value) or _URL.search(value)
         ):
-            raise ValueError("resume_text contains an email, phone number or URL")
+            raise ValueError("text contains an email, phone number or URL")
         return value
 
     @field_validator("reference")

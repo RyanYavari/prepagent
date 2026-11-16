@@ -219,3 +219,29 @@ One addition to `SYSTEM_PROMPT` in `agents/synthesis.py` (nothing else changed):
 
 **Revisit when:**
 A Sonnet-judged metric-v2 run on the new prompt shows whether synthesis faithfulness, answer relevancy and the dropped-citation counts moved; revert if relevancy or usefulness drops without a faithfulness gain.
+
+---
+
+## 2026-11-15 Optional job description: request-scoped, bare `[JD]` tag, shared untrusted rule left unchanged
+
+**Status:** Accepted (eval spike measured on 3 clean synthetic cases, self-graded; the form, API and viewer path not yet browser-verified)
+
+**Context:**
+Synthesis had to infer role requirements from company research because no job description was available, and the claim-level audit showed this was a main source of unsupported claims. A user who has the posting could not supply it.
+
+**Decision:**
+(1) An optional pasted job description (max 12,000 characters, rejected not truncated) is passed to synthesis only, as an `untrusted_data` block, and requirements, alignment and gaps must cite it with a bare `[JD]` tag. Code enforces it: `[JD]` is valid only when a JD was supplied and, with a JD, a `key_requirements` item without it is dropped. (2) It is request-scoped: not stored, logged, put in run metadata or embedded; the 422 for an oversize JD does not echo it. (3) `UNTRUSTED_RULE` is not changed; the JD-present prompt sentence says the block is data. (4) Calendar-detected briefings never get a JD. (5) The viewer marks `[JD]` items with a chip and the Key requirements list with a "From job description" label.
+
+**Alternatives considered:**
+- Store the JD on `briefings` (migration 008): Rejected for now. Nothing here needs it after generation (no regenerate or display), and it would add a retention surface for pasted posting text and recruiter details. Revisit if regenerate or JD display becomes a goal.
+- Add the job description to `UNTRUSTED_RULE`: Rejected because that shared text feeds every agent, so it would change every prompt hash and break the byte-identical no-JD prompt that keeps older evals comparable.
+- Fetch a JD from a URL, or use the calendar event text: Rejected: a second untrusted-content path (SSRF, injection) for the most attacker-controllable text in the system.
+- `[JD: <quoted phrase>]` with code-side phrase checking: Deferred; stronger but brittle to paraphrase and more tokens. Revisit if requirements drift from the JD.
+- Reject URLs and markup like other short fields: Rejected because real postings contain links, "C++" and "<5ms"; safety comes from the prompt layer plus control-character stripping.
+
+**Tradeoffs:**
+- Pro: requirements are grounded in text the user supplied and visibly marked; on 3 synthetic cases factual synthesis faithfulness went from about 0.56 to about 0.99 with all 29 key requirements tagged and none dropped
+- Con: that gain is partly by construction (the JD is a scored context), the JDs were clean synthetic ones, and the judge was the generating model, so it is a best case; the pasted text is sent to LangSmith when tracing is on; JD-derived paraphrases are embedded as prior briefings; no regenerate-with-same-JD and `[JD]` citations cannot be audited against the source later
+
+**Revisit when:**
+Regenerate or JD display is wanted (store it), a real-posting eval or live smoke call shows requirements drifting from the JD (stronger tag), or a later briefing is visibly nudged by an earlier role's JD (filter prior briefings by role).

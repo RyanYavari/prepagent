@@ -10,6 +10,7 @@ import re
 import unicodedata
 
 _FORBIDDEN = re.compile(r"://|www\.|[<>`{}]", re.IGNORECASE)
+_BLANK_RUNS = re.compile(r"\n{3,}")
 
 
 def _strip_controls(value: str) -> str:
@@ -36,3 +37,24 @@ def validate_safe_field(value: str | None) -> str | None:
     if _FORBIDDEN.search(value):
         raise ValueError("must not contain URLs, angle brackets, backticks or braces")
     return value
+
+
+def clean_long_text(value: str | None) -> str | None:
+    """
+    For long pasted text that goes into an LLM prompt (job description).
+
+    Unlike `validate_safe_field` it accepts URLs and markup-ish characters, which
+    real postings contain. It normalizes newlines, keeps `\\n` and `\\t`, removes
+    other control (Cc) and format (Cf: zero-width, bidi override) characters that
+    can hide injected text, collapses runs of blank lines and strips the ends.
+    No NFKC (it would rewrite legitimate characters). Returns None when nothing is
+    left. Injection safety comes from the prompt layer, not from rejecting content.
+    """
+    if value is None:
+        return None
+    text = value.replace("\r\n", "\n").replace("\r", "\n")
+    text = "".join(
+        c for c in text if c in "\n\t" or unicodedata.category(c) not in ("Cc", "Cf")
+    )
+    text = _BLANK_RUNS.sub("\n\n", text).strip()
+    return text or None

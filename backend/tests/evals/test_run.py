@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -22,6 +23,9 @@ def allow_run(monkeypatch):
     monkeypatch.delenv("JUDGE_MODEL", raising=False)
     for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "TAVILY_API_KEY"):
         monkeypatch.setenv(k, "sk-test-SECRETVALUE")
+
+
+V2 = str(Path(run_mod.__file__).parent / "golden_v2.json")
 
 
 def fake_collect(calls):
@@ -355,3 +359,58 @@ def test_rescore_estimate_has_no_pipeline_calls(tmp_path):
     _, lines, _ = go(tmp_path, "--limit", "2", "--rescore", "--dry-run")
     text = "\n".join(lines)
     assert "pipeline]" not in text and "Tavily ~0" in text
+
+
+def test_jd_flag_off_strips_jd_and_records_mode(tmp_path):
+    seen: dict[str, str | None] = {}
+
+    def collect(case, budget, cache):
+        seen[case.id] = case.job_description
+        col = collected()
+        col.case = case
+        return col
+
+    for mode in ("on", "off"):
+        d = tmp_path / mode
+        go(
+            d,
+            "--dataset",
+            V2,
+            "--cases",
+            "stripe-backend-01",
+            "--jd",
+            mode,
+            collect=collect,
+        )
+        data, _ = results_file(d)
+        assert data["meta"]["config"]["jd_mode"] == mode
+        assert data["meta"]["config"]["jd_cases"] == (1 if mode == "on" else 0)
+        assert (seen["stripe-backend-01"] is not None) == (mode == "on")
+
+
+def test_golden_v2_has_jd_on_exactly_three_cases_and_v1_is_untouched():
+    from evals.dataset import load_dataset
+
+    v2 = load_dataset(V2)
+    assert sorted(c.id for c in v2.cases if c.job_description) == [
+        "datadog-sre-01",
+        "mercury-ambiguous-01",
+        "stripe-backend-01",
+    ]
+    assert not any(c.job_description for c in load_dataset().cases)
+
+
+def test_jd_rejects_contact_details():
+    import pytest
+
+    from evals.dataset import GoldenCase
+
+    with pytest.raises(ValueError):
+        GoldenCase.model_validate(
+            {
+                "id": "x",
+                "company": "A",
+                "reference": ["r"],
+                "job_description": "apply at https://example.com",
+            }
+        )

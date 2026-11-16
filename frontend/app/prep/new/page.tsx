@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  buildPayload,
+  errorMessage,
+  jobDescriptionStatus,
+} from "@/lib/briefingForm";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -15,7 +20,9 @@ export default function NewBriefing() {
     role: "",
     interview_date: "",
     resume_text: "",
+    job_description: "",
   });
+  const jd = jobDescriptionStatus(formData.job_description);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -39,31 +46,15 @@ export default function NewBriefing() {
       return;
     }
 
+    if (jd.over) {
+      setError(jd.message);
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const payload: {
-        company: string;
-        interviewer?: string;
-        role?: string;
-        interview_date?: string;
-        resume_text?: string;
-      } = {
-        company: formData.company.trim(),
-      };
-
-      if (formData.interviewer.trim()) {
-        payload.interviewer = formData.interviewer.trim();
-      }
-      if (formData.role.trim()) {
-        payload.role = formData.role.trim();
-      }
-      if (formData.interview_date) {
-        payload.interview_date = formData.interview_date;
-      }
-      if (formData.resume_text.trim()) {
-        payload.resume_text = formData.resume_text.trim();
-      }
+      const payload = buildPayload(formData);
 
       const res = await fetch(`${API_URL}/briefings`, {
         method: "POST",
@@ -83,7 +74,7 @@ export default function NewBriefing() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Failed to create briefing");
+        throw new Error(errorMessage(errData.detail, "Failed to create briefing"));
       }
 
       const created = await res.json();
@@ -212,6 +203,44 @@ export default function NewBriefing() {
             </p>
           </div>
 
+          <div>
+            <label
+              htmlFor="job_description"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Job description (Optional)
+            </label>
+            <textarea
+              id="job_description"
+              name="job_description"
+              value={formData.job_description}
+              onChange={handleChange}
+              rows={10}
+              aria-invalid={jd.over}
+              aria-describedby="job_description_help"
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm ${
+                jd.over ? "border-red-400" : "border-gray-300"
+              }`}
+              placeholder="Paste the job posting here..."
+            />
+            <div
+              id="job_description_help"
+              className="flex justify-between gap-4 text-xs mt-1"
+            >
+              <p className="text-gray-500">
+                Optional. If provided, role requirements come from it and are
+                marked as such. The pasted text itself is used for this
+                briefing only and is not saved.
+              </p>
+              <p
+                className={`shrink-0 ${jd.over ? "text-red-600" : "text-gray-500"}`}
+                role={jd.over ? "alert" : undefined}
+              >
+                {jd.over ? jd.message : `${jd.message} characters`}
+              </p>
+            </div>
+          </div>
+
           {error && (
             <div className="border border-red-200 bg-red-50 rounded-lg p-4">
               <p className="text-red-600 text-sm">{error}</p>
@@ -221,7 +250,7 @@ export default function NewBriefing() {
           <div className="flex gap-4">
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || jd.over}
               className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {loading ? "Creating..." : "Create Briefing"}

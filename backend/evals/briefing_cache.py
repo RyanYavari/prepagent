@@ -29,9 +29,13 @@ class BriefingCache:
     def __init__(self, directory: Path | None = None) -> None:
         self.directory = directory or DEFAULT_DIR
 
-    def _path(self, case_id: str) -> Path:
+    def _path(self, case_id: str, case: GoldenCase | None = None) -> Path:
+        """Cache file for a case. A case carrying a job description gets a `-jd`
+        suffix, so `--jd on` and `--jd off` runs of the same case do not overwrite
+        each other (cases without a JD keep the original name)."""
         safe = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in case_id)
-        return self.directory / f"{safe}.json"
+        suffix = "-jd" if case is not None and case.job_description else ""
+        return self.directory / f"{safe}{suffix}.json"
 
     def save(
         self,
@@ -58,13 +62,13 @@ class BriefingCache:
             "pipeline_warnings": col.pipeline_warnings,
             "elapsed_seconds": col.elapsed_seconds,
         }
-        self._path(col.case.id).write_text(json.dumps(entry, indent=1))
+        self._path(col.case.id, col.case).write_text(json.dumps(entry, indent=1))
         return True
 
     def load(self, case: GoldenCase) -> tuple[CollectedCase, dict[str, Any]]:
         """The cached CollectedCase and its generation settings
         ({agent_model, prompt_hashes, created_at}). Raises BriefingCacheMiss."""
-        path = self._path(case.id)
+        path = self._path(case.id, case)
         if not path.exists():
             raise BriefingCacheMiss(
                 f"no cached briefing for {case.id!r}; run once without --rescore"
