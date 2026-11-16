@@ -11,8 +11,7 @@ import {
   isNotFoundStatus,
   type Briefing,
 } from "@/lib/briefing";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_URL } from "@/lib/api";
 
 type Stopped = "timeout" | "errors" | null;
 

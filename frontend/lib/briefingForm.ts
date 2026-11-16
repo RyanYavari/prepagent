@@ -69,3 +69,31 @@ export function errorMessage(detail: unknown, fallback: string): string {
   }
   return fallback;
 }
+
+function formatWait(retryAfter: string | null): string | null {
+  const seconds = retryAfter ? Number.parseInt(retryAfter, 10) : Number.NaN;
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  if (seconds < 90) return "a minute";
+  if (seconds < 5400) return `about ${Math.round(seconds / 60)} minutes`;
+  return `about ${Math.round(seconds / 3600)} hours`;
+}
+
+// Plain-language copy for the backend's cost controls: 429 (a per-user, concurrency,
+// global or per-IP limit) and 503 (briefing creation switched off). Returns null for any
+// other status so the caller falls back to its normal error handling. `retryAfter` is
+// the Retry-After header (the backend exposes it to the browser via CORS).
+export function blockedMessage(
+  status: number,
+  detail: unknown,
+  retryAfter: string | null,
+): string | null {
+  if (status === 503) {
+    return "Briefing creation is temporarily unavailable. Please try again later.";
+  }
+  if (status !== 429) return null;
+  const base = typeof detail === "string" && detail ? detail : "Too many requests";
+  const wait = formatWait(retryAfter);
+  return wait
+    ? `${base}. You can try again in ${wait}.`
+    : `${base}. Please try again later.`;
+}

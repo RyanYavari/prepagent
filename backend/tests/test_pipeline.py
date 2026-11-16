@@ -202,7 +202,9 @@ def test_run_pipeline_failure_marks_failed(caplog):
         "failure_reason": pipeline.REASON_ERROR,
     }
     assert not any("content" in u for u in updates)
-    assert "tavily down" in caplog.text
+    # Logged by class only: an error message can quote the prompt (resume, JD).
+    assert "tavily down" not in caplog.text
+    assert "Briefing pipeline failed" in caplog.text
 
 
 def test_run_pipeline_failed_status_write_error_is_contained(caplog):
@@ -218,7 +220,8 @@ def test_run_pipeline_failed_status_write_error_is_contained(caplog):
     with caplog.at_level("ERROR"):
         _run_pipeline(graph, sb)  # must not raise
 
-    assert "db down" in caplog.text
+    assert "Could not mark briefing" in caplog.text
+    assert "db down" not in caplog.text  # class only; messages can echo rows
 
 
 def test_run_pipeline_persist_error_marks_failed():
@@ -271,7 +274,8 @@ def test_chunk_writer_failure_keeps_briefing_complete(error, caplog):
     updates = _updates(sb)
     assert updates[-1]["status"] == "complete"
     assert not any(u.get("status") == "failed" for u in updates)
-    assert str(error) in caplog.text
+    assert type(error).__name__ in caplog.text  # class only; the message is not logged
+    assert str(error) not in caplog.text
 
 
 def test_failed_pipeline_writes_no_chunks():

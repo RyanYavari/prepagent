@@ -1,0 +1,31 @@
+# HTTPS for the API. Caddy obtains and renews the Let's Encrypt certificate itself and
+# redirects http to https. DOMAIN comes from the compose environment (api.<DOMAIN>).
+api.{$DOMAIN} {
+	encode zstd gzip
+
+	# Largest legitimate body is resume_text (50,000 chars) + job_description
+	# (12,000 chars): ~248 KB as UTF-8, ~372 KB if every non-ASCII character is
+	# \u-escaped. 512 KB covers both; anything bigger is refused before the app parses it.
+	request_body {
+		max_size 512KB
+	}
+
+	reverse_proxy api:8000
+
+	# Access log: drop the OAuth `code` and `state` from query strings (the callback is
+	# GET /auth/callback?code=...&state=...) and any credential headers.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri query {
+					delete code
+					delete state
+				}
+				request>headers>Authorization delete
+				request>headers>Cookie delete
+			}
+		}
+	}
+}

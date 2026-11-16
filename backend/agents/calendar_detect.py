@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from agents.llm import structured_llm
 from models.text_safety import clean_field
 from services.calendar import NormalizedEvent
+from services.log_safety import log_failure
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +91,9 @@ def classify_event(event: NormalizedEvent) -> InterviewDetection:
             if isinstance(out, InterviewDetection)
             else InterviewDetection.model_validate(out)
         )
-    except ValidationError:
-        logger.exception("Calendar classifier returned an invalid structure")
+    except ValidationError as exc:
+        # Class only: the validation message contains the event title and attendees.
+        log_failure(logger, "Calendar classifier returned an invalid structure", exc)
         return InterviewDetection(is_interview="uncertain", confidence=0.0)
 
 

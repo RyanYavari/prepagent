@@ -1,0 +1,58 @@
+# Production stack for one EC2 instance: the API (single worker) behind Caddy.
+# Not the root docker-compose.yml (that file is untouched). Run through deploy/deploy.sh:
+#   IMAGE_TAG=<git sha> docker compose -f deploy/docker-compose.prod.yml \
+#     --env-file /etc/prepagent/deploy.conf up -d
+#
+# /etc/prepagent/deploy.conf (not secret) holds DOMAIN=<your-domain>; the API's secrets
+# are in /etc/prepagent/backend.env, rendered from SSM by deploy/render-env.sh.
+# Do not run `docker compose config` or `docker inspect` and paste the output anywhere:
+# both print resolved environment values.
+
+services:
+  api:
+    image: prepagent-api:${IMAGE_TAG:?set IMAGE_TAG to the git sha that was built}
+    env_file: /etc/prepagent/backend.env
+    environment:
+      APP_ENV: production
+    # Not published on the host: only Caddy, on the compose network, can reach it.
+    expose:
+      - "8000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in /etc/prepagent/deploy.conf}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:

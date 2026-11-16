@@ -23,6 +23,7 @@ from agents.state import PipelineState
 from agents.synthesis import synthesis_node
 from models.briefing import BriefingSections, BriefingStatus
 from services.briefing_chunks import write_briefing_chunks
+from services.log_safety import log_failure
 from services.net_config import env_float
 from services.supabase_client import create_client, execute
 
@@ -155,8 +156,10 @@ def _write_chunks(
     """Embed the completed briefing for later retrieval; never affects its status."""
     try:
         write_briefing_chunks(user_id, briefing_id, company, role, content)
-    except Exception:
-        logger.exception("Could not write briefing chunks for briefing %s", briefing_id)
+    except Exception as exc:  # noqa: BLE001 - logged via log_failure
+        log_failure(
+            logger, f"Could not write briefing chunks for briefing {briefing_id}", exc
+        )
 
 
 def build_graph():
@@ -236,7 +239,7 @@ def run_pipeline(
         )
         outcome = "complete"
         _write_chunks(briefing_id, user_id, company, role, content)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - logged via log_failure
         timed_out = isinstance(exc, PipelineDeadlineExceeded)
         if timed_out:
             logger.error(
@@ -245,7 +248,11 @@ def run_pipeline(
                 env_float("PIPELINE_DEADLINE_SECONDS"),
             )
         else:
-            logger.exception("Briefing pipeline failed for briefing %s", briefing_id)
+            # Class only: a pydantic or provider error message can quote the prompt
+            # (resume, job description) or a database row.
+            log_failure(
+                logger, f"Briefing pipeline failed for briefing {briefing_id}", exc
+            )
         try:
             _mark_failed(
                 _get_supabase(),
@@ -253,8 +260,10 @@ def run_pipeline(
                 user_id,
                 REASON_TIMEOUT if timed_out else REASON_ERROR,
             )
-        except Exception:
-            logger.exception("Could not mark briefing %s as failed", briefing_id)
+        except Exception as mark_exc:  # noqa: BLE001 - logged via log_failure
+            log_failure(
+                logger, f"Could not mark briefing {briefing_id} as failed", mark_exc
+            )
     finally:
         logger.info(
             "pipeline briefing_id=%s event=end status=%s elapsed=%.2fs",

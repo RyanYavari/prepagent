@@ -8,6 +8,7 @@ import {
   dismissDetection,
   getConnectUrl,
   getStatus,
+  isCalendarUnavailable,
   isSessionExpired,
   listDetections,
   needsReconnect,
@@ -30,6 +31,8 @@ export function CalendarPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reconnectRequired, setReconnectRequired] = useState(false);
+  // True when the backend has the calendar feature switched off (CALENDAR_ENABLED).
+  const [disabled, setDisabled] = useState(false);
 
   // Runs an action with the session token, mapping failures to UI state.
   const run = useCallback(
@@ -45,6 +48,7 @@ export function CalendarPanel({
         await action(token);
       } catch (e) {
         if (isSessionExpired(e)) onSessionExpired();
+        else if (isCalendarUnavailable(e)) setDisabled(true);
         else if (needsReconnect(e)) {
           setReconnectRequired(true);
           setStatus({ connected: true, status: "revoked", last_synced_at: null });
@@ -76,6 +80,8 @@ export function CalendarPanel({
       if (s.connected && s.status === "active") await sync(token);
     });
   }, [run, sync]);
+
+  if (disabled) return null;
 
   return (
     <CalendarPanelView

@@ -32,7 +32,7 @@ The output is a 4-section briefing: company intelligence, interviewer profile, y
 
 **Integrations:** Google OAuth and Google Calendar interview detection (built, via the Calendar API directly rather than MCP); Gmail and Google Drive (planned)
 
-**Infrastructure:** Docker Compose and GitHub Actions CI (built); AWS EC2 / Vercel deployment (planned)
+**Infrastructure:** GitHub Actions CI (built); production deployment files for AWS EC2 (Docker Compose + Caddy) and Vercel (built, not yet live; see [Deployment](#deployment))
 
 ## Target Architecture
 
@@ -108,6 +108,16 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
+
+## Deployment
+
+Live: https://<LIVE_URL_PLACEHOLDER> (frontend on Vercel) · API: https://api.<DOMAIN_PLACEHOLDER>/health
+
+- **Backend:** one EC2 instance running Docker Compose (FastAPI under uvicorn with a **single worker**, Caddy for HTTPS). One worker is required: the OAuth PKCE verifier store and the rate limiter are in process memory, so with more workers about half of sign-ins would fail.
+- **Frontend:** Vercel, root directory `frontend`, `NEXT_PUBLIC_API_URL` set for Production (a Vercel production build fails without it).
+- **Secrets:** AWS SSM Parameter Store, rendered to a root-only env file on the server; never committed, never in the image or the browser bundle.
+- **Access and cost controls:** Google OAuth runs in Testing mode (invite list). The API enforces per-user and global daily briefing caps (defaults 3 and 20), per-IP rate limits on the sign-in endpoints, and kill switches (`SIGNUPS_ENABLED`, `ALLOWED_EMAILS`, `BRIEFINGS_ENABLED`, `CALENDAR_ENABLED`). With `APP_ENV=production` the API refuses to start on missing or weak secrets.
+- Design, smoke checklist and rollback: [specs/deployment.md](specs/deployment.md). Operator steps: [deploy/RUNBOOK.md](deploy/RUNBOOK.md).
 
 ## Agent Architecture (design)
 

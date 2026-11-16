@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 import os
@@ -11,11 +12,16 @@ from services.google_auth import (
     build_authorization_url,
     exchange_code_for_tokens,
 )
+from services.limits import email_allowed, signups_enabled
+from services.log_safety import log_failure
+from services.prod_config import get_jwt_secret
 from services.supabase_client import create_client
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+_NOT_AVAILABLE = "Sign-in is not available for this account"
 
 
 def _get_supabase():
@@ -34,7 +40,7 @@ def _create_session_token(user_id: str, email: str) -> str:
     }
     return jwt.encode(
         payload,
-        os.getenv("JWT_SECRET", "dev-secret-change-me"),
+        get_jwt_secret(),
         algorithm="HS256",
     )
 
@@ -48,6 +54,27 @@ async def auth_google():
     except Exception:
         logger.exception("Failed to build auth URL")
         raise HTTPException(status_code=500, detail="Failed to build auth URL")
+
+
+def _find_or_create_user(email: str) -> dict:
+    """Existing user, or a new one when signups are open. Raises HTTPException."""
+    try:
+        supabase = _get_supabase()
+        existing = (
+            supabase.table("users").select("id, email").eq("email", email).execute()
+        )
+
+        if existing.data:
+            return existing.data[0]
+        if not signups_enabled():
+            raise HTTPException(status_code=403, detail=_NOT_AVAILABLE)
+        result = supabase.table("users").insert({"email": email}).execute()
+        return result.data[0]
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log_failure(logger, "Database error during user upsert", exc)
+        raise HTTPException(status_code=500, detail="Database error")
 
 
 @router.get("/callback", response_model=TokenResponse)
@@ -70,21 +97,13 @@ async def auth_callback(
 
     email = token_data["email"]
 
-    # Upsert user in Supabase
-    try:
-        supabase = _get_supabase()
-        existing = (
-            supabase.table("users").select("id, email").eq("email", email).execute()
-        )
+    # Invite list / signup switch (specs/deployment.md). One generic refusal for both,
+    # and the address is never logged or echoed.
+    if not email_allowed(email):
+        raise HTTPException(status_code=403, detail=_NOT_AVAILABLE)
 
-        if existing.data:
-            user = existing.data[0]
-        else:
-            result = supabase.table("users").insert({"email": email}).execute()
-            user = result.data[0]
-    except Exception:
-        logger.exception("Database error during user upsert")
-        raise HTTPException(status_code=500, detail="Database error")
+    # Upsert user in Supabase (blocking client: off the event loop, see Slice 2)
+    user = await asyncio.to_thread(_find_or_create_user, email)
 
     session_token = _create_session_token(user["id"], email)
     return {"token": session_token, "email": email}

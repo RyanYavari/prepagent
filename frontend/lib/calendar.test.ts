@@ -83,3 +83,14 @@ describe("describeSync", () => {
     expect(describeSync(sync({ truncated: true }))).toContain("first 100");
   });
 });
+
+import { CalendarApiError as ApiError, isCalendarUnavailable } from "./calendar";
+
+describe("isCalendarUnavailable", () => {
+  it("is true only for the backend's calendar-disabled 404", () => {
+    expect(isCalendarUnavailable(new ApiError(404, "Calendar is not available"))).toBe(true);
+    expect(isCalendarUnavailable(new ApiError(404, "Detection not found"))).toBe(false);
+    expect(isCalendarUnavailable(new ApiError(500, "Calendar is not available"))).toBe(false);
+    expect(isCalendarUnavailable(new Error("Calendar is not available"))).toBe(false);
+  });
+});

@@ -192,7 +192,9 @@ class TestCreateBriefingWithResume:
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
         assert response.json()["detail"] == "Embedding service temporarily unavailable"
         assert "secret-key-sk-123" not in response.text
-        assert "secret-key-sk-123" in caplog.text
+        # Logged by class only: provider messages can quote the request.
+        assert "secret-key-sk-123" not in caplog.text
+        assert "OpenAIError" in caplog.text
 
     @patch("routers.research.process_resume_embedding")
     @patch("routers.research._get_supabase")

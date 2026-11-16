@@ -35,6 +35,7 @@ from services.google_auth import (
     CalendarAuthError,
     refresh_calendar_access_token,
 )
+from services.log_safety import log_failure
 from services.token_crypto import decrypt_token
 
 logger = logging.getLogger(__name__)
@@ -230,8 +231,8 @@ async def sync_user_calendar(
             llm_calls += 1
             try:
                 detection = classify_event(event)
-            except Exception:
-                logger.exception("Calendar classification failed for an event")
+            except Exception as exc:  # noqa: BLE001 - logged via log_failure
+                log_failure(logger, "Calendar classification failed for an event", exc)
                 result.errors += 1
                 # Release the claim so the event is retried on the next sync.
                 supabase.table("calendar_detections").delete().eq(
@@ -263,8 +264,10 @@ async def sync_user_calendar(
                         ),
                         start_pipeline,
                     )
-                except Exception:
-                    logger.exception("Auto-creating briefing failed; asking user")
+                except Exception as exc:  # noqa: BLE001 - logged via log_failure
+                    log_failure(
+                        logger, "Auto-creating briefing failed; asking user", exc
+                    )
                     _finish(
                         supabase,
                         user_id,
@@ -300,8 +303,8 @@ async def sync_user_calendar(
                     now,
                 )
                 result.needs_confirmation += 1
-        except Exception:
-            logger.exception("Calendar sync failed for an event")
+        except Exception as exc:  # noqa: BLE001 - logged via log_failure
+            log_failure(logger, "Calendar sync failed for an event", exc)
             result.errors += 1
 
     supabase.table("calendar_connections").update(
