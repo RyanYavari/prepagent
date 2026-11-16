@@ -60,10 +60,10 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - `services/calendar_sync.py`: on-demand polling (`POST /calendar/sync`, dashboard load) + optional interval loop (`CALENDAR_POLL_INTERVAL_MINUTES`, default off); dedupe via `UNIQUE (user_id, google_event_id)` claim-then-act
 - `services/briefings.py`: shared `create_pending_briefing` used by `POST /briefings` and calendar (the only action event text can trigger)
 - Downstream prompts (company, interviewer, synthesis) treat fields/search results as `<untrusted_data>`; `BriefingCreate` rejects URLs/markup/control chars in company/role/interviewer
-- Needs migration `004_calendar_integration.sql` applied, `TOKEN_ENCRYPTION_KEY`, Calendar API enabled + scope + redirect URI in Google Cloud. Testing-status OAuth apps expire refresh tokens after 7 days
+- Needs migration `004_calendar_integration.sql` (applied), `TOKEN_ENCRYPTION_KEY`, Calendar API enabled + scope + redirect URI in Google Cloud. Testing-status OAuth apps expire refresh tokens after 7 days
 - Known limitations: rescheduled events don't update the existing briefing's date; only the first interviewer is researched
 - ADR 7 + §4 amendment in ARCHITECTURE_DECISIONS.md; /why entries in docs/decisions.md
-- **Frontend (CalendarPanel, /calendar/callback) was never run in a browser**: lint, tsc, build and vitest pass, but the connect round-trip, sync, confirm, dismiss and revoked states are unverified
+- Frontend (CalendarPanel, /calendar/callback): migration 004 applied and the calendar flow verified in a browser by the user
 
 ### ✅ Complete (Sign-in tokens) — specs/signin-token-removal.md
 - `/auth/callback` stores no Google token (insert is `{email}` only); sign-in uses `access_type=online`, `exchange_code_for_tokens` returns `email`/`name` only; tokens never logged
@@ -77,7 +77,7 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - Failure reason is not persisted (only `failed` status); a crash mid-run leaves the row `running`
 
 ### Next Task
-1. Apply migration 004, set `TOKEN_ENCRYPTION_KEY`, configure Google Cloud, then **manually verify the calendar flow and the briefing viewer in a browser**
+1. **Manually verify the briefing viewer in a browser** (the calendar flow is already verified)
 2. Run the sign-in token revoke script, then apply migration 005
 3. Briefing chunk writer — spec it first with /spec
 
@@ -122,6 +122,7 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 
 ## What Claude gets wrong
 - Running `ruff format <dir>` then `git add -u` sweeps unrelated files into a commit. Format only the files you changed, and stage them by name.
+- `Flow.authorization_url` in google-auth-oauthlib defaults to `access_type=offline`. A flow that must not mint a refresh token (sign-in) has to pass `access_type="online"` explicitly; omitting the argument is not enough.
 - The same goes for `ruff check --fix`: run it on the files you changed, not a directory (`ruff check --fix services` can rewrite files you never touched).
 
 - On macOS, `sed -i` needs an explicit backup-suffix argument (`sed -i ''`) and fails on multi-line edits. Use the Edit tool or a Python script instead.
