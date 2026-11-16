@@ -9,12 +9,13 @@ sends. Native structured outputs (method="json_schema") work on it.
 """
 
 import os
+from typing import Literal
 
 from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
-STRUCTURED_OUTPUT_METHOD = "json_schema"
+STRUCTURED_OUTPUT_METHOD: Literal["function_calling", "json_schema"] = "json_schema"
 
 
 def get_model_name() -> str:
