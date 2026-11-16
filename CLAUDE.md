@@ -60,22 +60,38 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - `services/calendar_sync.py`: on-demand polling (`POST /calendar/sync`, dashboard load) + optional interval loop (`CALENDAR_POLL_INTERVAL_MINUTES`, default off); dedupe via `UNIQUE (user_id, google_event_id)` claim-then-act
 - `services/briefings.py`: shared `create_pending_briefing` used by `POST /briefings` and calendar (the only action event text can trigger)
 - Downstream prompts (company, interviewer, synthesis) treat fields/search results as `<untrusted_data>`; `BriefingCreate` rejects URLs/markup/control chars in company/role/interviewer
-- Needs migration `004_calendar_integration.sql` applied, `TOKEN_ENCRYPTION_KEY`, Calendar API enabled + scope + redirect URI in Google Cloud. Testing-status OAuth apps expire refresh tokens after 7 days
+- Needs migration `004_calendar_integration.sql` (applied), `TOKEN_ENCRYPTION_KEY`, Calendar API enabled + scope + redirect URI in Google Cloud. Testing-status OAuth apps expire refresh tokens after 7 days
 - Known limitations: rescheduled events don't update the existing briefing's date; only the first interviewer is researched
 - ADR 7 + §4 amendment in ARCHITECTURE_DECISIONS.md; /why entries in docs/decisions.md
-- **Frontend (CalendarPanel, /calendar/callback) was never run in a browser**: lint, tsc, build and vitest pass, but the connect round-trip, sync, confirm, dismiss and revoked states are unverified
+- Frontend (CalendarPanel, /calendar/callback): migration 004 applied and the calendar flow verified in a browser by the user
+
+### ✅ Complete (Sign-in tokens) — specs/signin-token-removal.md
+- `/auth/callback` stores no Google token (insert is `{email}` only); sign-in uses `access_type=online`, `exchange_code_for_tokens` returns `email`/`name` only; tokens never logged
+- `backend/scripts/revoke_stored_tokens.py` (`python -m scripts.revoke_stored_tokens` from backend/) revokes stored tokens at Google best effort and nulls the columns; migration `005_drop_signin_tokens.sql` then drops them (guarded: fails while any token remains). **Order was: deploy code, run script, apply 005.** Script run, migration 005 applied, and sign-in verified in a browser by the user
+
+### ✅ Complete (Week 3, Briefing chunk writer) — specs/briefing-chunk-writer.md
+- `services/briefing_chunks.py`: `write_briefing_chunks` renders the 4 briefing sections (not `warnings`, empty ones skipped) to text, embeds them, and replaces the briefing's `doc_type='briefing'` rows in `resume_embeddings` (company/role/`briefing_id`), so retrieval now returns same-company prior briefings
+- `run_pipeline` calls it after the row is `complete`; any failure is logged and swallowed (briefing stays `complete`)
+- Migration `006_briefing_chunk_link.sql` (`briefing_id` FK, cascade) — **must be applied to Supabase**. No backfill of earlier briefings. Not run against real OpenAI/Supabase yet (mocked tests only)
+
+### ✅ Complete (Week 3, Pipeline hardening) — after a real run hung 3+ min on `running` with nothing logged
+- Cause (inferred, not reproduced): no outbound call had a sane limit. Anthropic/OpenAI SDK read timeout defaulted to 600s, postgrest to 120s, Tavily had no retry, and the SDKs' retry logs were INFO (hidden). A DNS blip plus a long read timeout looks exactly like a silent hang
+- `services/net_config.py`: all limits read from env at call time, bad values fall back to defaults. `LLM_TIMEOUT_SECONDS`=45 / `LLM_MAX_RETRIES`=1, `EMBEDDING_TIMEOUT_SECONDS`=15 / `EMBEDDING_MAX_RETRIES`=2, `TAVILY_TIMEOUT_SECONDS`=12 / `TAVILY_MAX_RETRIES`=1, `SUPABASE_TIMEOUT_SECONDS`=10 / `SUPABASE_MAX_RETRIES`=2, `GOOGLE_TIMEOUT_SECONDS`=10 / `GOOGLE_MAX_RETRIES`=1 (Google OAuth + Calendar: reads/refresh/revoke retry any transport error; the single-use auth-code exchange retries connect errors only; sign-in `flow.fetch_token` gets the timeout too), `PIPELINE_DEADLINE_SECONDS`=120, `STALE_RUNNING_MINUTES`=10. `retry_call` logs the exception class only, never its message
+- `services/supabase_client.py`: every module builds its client via `create_client` here (timeout set); `execute(builder)` retries connect-class errors only (never read timeouts, so inserts are not duplicated). Used for the pipeline's own calls (status updates, retrieval, chunk writer, sweep); request-path routers get timeouts but no retry. Do not inject a shared `httpx_client` into supabase: it drops the base URL and `apikey` header
+- `agents/pipeline.py`: graph runs in a worker thread with an overall deadline; on timeout the row is `failed` with a generic `failure_reason` and a cancel flag stops the straggler before its next node. Every node logs `node=… briefing_id=… event=start|end|error elapsed=…` and the run logs `pipeline … event=end status=… elapsed=…` (ids and timings only)
+- `services/briefings.py` `sweep_stale_running`: `running` rows older than `STALE_RUNNING_MINUTES` (by `created_at`) become `failed`; runs at startup (`main._startup_sweep`, all users) and on `GET /briefings` (that user). Only `running` is swept; a `pending` row orphaned by a restart is not
+- Migration `007_briefing_failure_reason.sql` adds `briefings.failure_reason`; optional for correctness (writes fall back to status-only when the column is missing). `BriefingResponse.failure_reason` is returned but the frontend does not show it yet
+- Not re-run against real services; tests are mocked. A straggler thread cannot be killed, it only stops at the next node boundary and is bounded by per-call timeouts
 
 ### ❌ Not Started (Week 2+)
 - **supervisor.py** stays empty: fixed DAG, no supervisor
-- **Briefing chunk writer**: post-synthesis embedding of briefing sections (retrieval already reads them)
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
 - **RAGAS evaluation**: Not implemented
-- Failure reason is not persisted (only `failed` status); a crash mid-run leaves the row `running`
 
 ### Next Task
-1. Apply migration 004, set `TOKEN_ENCRYPTION_KEY`, configure Google Cloud, then **manually verify the calendar flow and the briefing viewer in a browser**
-2. **Follow-up spec (high priority): sign-in tokens.** `users.google_access_token` / `google_refresh_token` are stored in plaintext by `/auth/callback`; stop storing or encrypt them, and revoke old grants (gmail/drive/calendar granted before the scope trim)
-3. Briefing chunk writer — spec it first with /spec
+1. **Manually verify the briefing viewer in a browser** (the calendar flow is already verified)
+2. Apply migrations 006 and 007 (007 optional), then smoke-test the chunk writer with real keys (run two briefings for one company)
+3. Next feature: spec it first with /spec (RAGAS evaluation per ADR §5 is the largest open item)
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet
@@ -118,6 +134,7 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 
 ## What Claude gets wrong
 - Running `ruff format <dir>` then `git add -u` sweeps unrelated files into a commit. Format only the files you changed, and stage them by name.
+- `Flow.authorization_url` in google-auth-oauthlib defaults to `access_type=offline`. A flow that must not mint a refresh token (sign-in) has to pass `access_type="online"` explicitly; omitting the argument is not enough.
 - The same goes for `ruff check --fix`: run it on the files you changed, not a directory (`ruff check --fix services` can rewrite files you never touched).
 
 - On macOS, `sed -i` needs an explicit backup-suffix argument (`sed -i ''`) and fails on multi-line edits. Use the Edit tool or a Python script instead.
@@ -125,6 +142,10 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - In zsh, a variable holding several file names (`F="a b"; ruff check $F`) is not split into separate arguments. Pass the files directly.
 - Mocked LLM tests don't catch API-level incompatibilities (forced `tool_choice` and `temperature` both 400'd on the real model while every mocked test passed). Before calling an agent done, run one real smoke call per agent: `RUN_LIVE_LLM_TESTS=1 pytest tests/test_llm.py -k live` plus the node itself with real keys.
 - Frontend work must be checked in a real browser (run backend + frontend, exercise the page) before it is called done. If that isn't possible, say explicitly that it is unverified. Lint, `tsc` and `npm run build` can all pass without the page ever running, so they don't count as verification.
+
+- Each Bash call is a fresh shell, so the venv is not active between calls: put `source backend/venv/bin/activate` in the same command as `pytest`, `ruff` or `mypy` (otherwise "command not found").
+
+- `tests/conftest.py` patches `main._startup_sweep` for every test because `backend/.env` holds real credentials. When patching sleeps in tests, patch the module's own `time` reference (`patch("services.net_config.time")`), not `time.sleep`, which also silences the test's own sleeps
 
 ## Known local issues
 - mypy 2.4.1 "INTERNAL ERROR" locally is an environment problem, not a type error: it writes its cache via `sqlite3`, and this machine's Homebrew Python can't load `libsqlite3.dylib`. Type errors are reported before the crash; for a clean exit code run `mypy . --ignore-missing-imports --cache-dir=/dev/null --no-sqlite-cache` from `backend/` (same command CI runs, plus the cache flags). Config is in `backend/mypy.ini`.
@@ -137,6 +158,6 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 
 ## Non-obvious gotchas
 - All agents get their LLM from `agents/llm.py` (`structured_llm`): `AGENT_MODEL` env var (default `claude-sonnet-5-5`), `method="json_schema"` for structured output, and no `temperature` (the model returns 400 for forced `tool_choice` and for `temperature`)
-- Google OAuth tokens stored in Supabase users table, not in session
+- Sign-in stores no Google tokens; only the encrypted calendar refresh token is stored (`calendar_connections`)
 - pgvector chosen over Pinecone (corpus is too small for dedicated vector service)
 - Frontend auth state lives in localStorage (session JWT)

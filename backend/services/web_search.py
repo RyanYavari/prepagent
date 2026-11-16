@@ -7,9 +7,19 @@ Tavily propagate so callers never mistake an outage for "no results".
 
 import os
 
+import requests
 from tavily import TavilyClient
 
 from models.research import SearchResult
+from services.net_config import env_float, env_int, retry_call
+
+# Transient failures worth retrying (DNS/connect problems, timeouts). Tavily's
+# TimeoutError is raised when its request times out. API errors (4xx) propagate.
+_RETRYABLE = (
+    TimeoutError,
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+)
 
 
 def search_web(query: str, max_results: int = 5) -> list[SearchResult]:
@@ -25,7 +35,16 @@ def search_web(query: str, max_results: int = 5) -> list[SearchResult]:
         raise RuntimeError("TAVILY_API_KEY is not configured")
 
     client = TavilyClient(api_key=api_key)
-    response = client.search(query=query, max_results=max_results)
+    response = retry_call(
+        lambda: client.search(
+            query=query,
+            max_results=max_results,
+            timeout=env_float("TAVILY_TIMEOUT_SECONDS"),
+        ),
+        retries=env_int("TAVILY_MAX_RETRIES"),
+        retry_on=_RETRYABLE,
+        label="tavily search",
+    )
 
     results: list[SearchResult] = []
     for item in response.get("results", []):

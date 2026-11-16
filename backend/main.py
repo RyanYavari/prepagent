@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -9,10 +10,58 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
+LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+
+# Libraries that log request URLs/params at INFO (httpx) or payload details at
+# lower levels. Kept at WARNING so enabling INFO for our code never exposes them.
+_QUIET_LOGGERS = (
+    "httpx",
+    "httpcore",
+    "urllib3",
+    "hpack",
+    "openai",
+    "anthropic",
+    "langsmith",
+    "supabase",
+    "postgrest",
+)
+
+
+def configure_logging() -> None:
+    """
+    Make INFO logs from agents/services visible, once.
+
+    Attaches a handler to the root logger only if none exists (uvicorn installs its
+    own handlers on its own non-propagating loggers, so its access log is not
+    duplicated here). Never log resume text, chunk content, tokens or API keys:
+    log ids and counts only.
+    """
+    root = logging.getLogger()
+    if not root.handlers:
+        logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    root.setLevel(logging.INFO)
+    for name in _QUIET_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+configure_logging()
+
+
+def _startup_sweep() -> None:
+    """Fail briefings orphaned on `running` by a previous process. Never raises."""
+    try:
+        from services.briefings import sweep_stale_running
+        from services.supabase_client import get_service_client
+
+        sweep_stale_running(get_service_client())
+    except Exception:
+        logging.getLogger(__name__).exception("Startup stale briefing sweep failed")
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Start the optional calendar poller (off unless the interval is set)."""
+    """Sweep stale runs, then start the optional calendar poller (off unless set)."""
+    await asyncio.to_thread(_startup_sweep)
     from routers.calendar import _get_supabase
     from services.calendar_poller import poll_interval_minutes, run_poller
 

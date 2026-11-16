@@ -20,6 +20,7 @@ def merge_warnings(existing: list[str] | None, update: list[str] | None) -> list
 
 class PipelineState(TypedDict, total=False):
     user_id: str
+    briefing_id: str
     company: str
     interviewer: str | None
     role: str | None

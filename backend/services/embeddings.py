@@ -11,7 +11,9 @@ from typing import Any, cast
 from uuid import UUID
 
 from openai import OpenAI
-from supabase import create_client
+
+from services.net_config import env_float, env_int
+from services.supabase_client import create_client
 
 
 @dataclass
@@ -106,7 +108,11 @@ def embed_text(text: str) -> list[float]:
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(
+        api_key=api_key,
+        timeout=env_float("EMBEDDING_TIMEOUT_SECONDS"),
+        max_retries=env_int("EMBEDDING_MAX_RETRIES"),
+    )
 
     response = client.embeddings.create(
         model="text-embedding-3-small",

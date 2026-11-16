@@ -67,8 +67,6 @@ Four tables. Simple and defensible.
 create table users (
   id uuid primary key default gen_random_uuid(),
   email text unique not null,
-  google_access_token text,
-  google_refresh_token text,
   resume_text text,
   pinecone_namespace text,  -- user-specific namespace
   created_at timestamptz default now()

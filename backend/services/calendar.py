@@ -14,6 +14,8 @@ from typing import Any
 
 import httpx
 
+from services.net_config import aretry_call, env_float, env_int
+
 logger = logging.getLogger(__name__)
 
 EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
@@ -90,12 +92,25 @@ async def fetch_events(
         "maxResults": MAX_EVENTS,
     }
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.get(
-                EVENTS_URL,
-                params=params,
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
+
+        async def attempt() -> httpx.Response:
+            async with httpx.AsyncClient(
+                timeout=env_float("GOOGLE_TIMEOUT_SECONDS")
+            ) as client:
+                return await client.get(
+                    EVENTS_URL,
+                    params=params,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+
+        # events.list is a read, so any transport error (including a read timeout)
+        # is safe to retry.
+        response = await aretry_call(
+            attempt,
+            retries=env_int("GOOGLE_MAX_RETRIES"),
+            retry_on=(httpx.TransportError,),
+            label="google calendar events",
+        )
     except httpx.HTTPError as e:
         raise CalendarApiError("Calendar request failed") from e
     if response.status_code != 200:

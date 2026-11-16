@@ -95,3 +95,27 @@ Use the Google Calendar API directly via httpx. No part of this phase is MCP-bas
 Exposing PrepAgent itself as an MCP server (real MCP, small), or a multi-tenant calendar MCP server exists.
 
 ---
+
+---
+
+## 2026-11-15 Stop storing sign-in Google tokens (instead of encrypting them)
+
+**Status:** Accepted
+
+**Context:**
+`/auth/callback` stored Google access and refresh tokens in plaintext in `users`. Nothing read them, and calendar access now has its own encrypted store (`calendar_connections`).
+
+**Decision:**
+Sign-in uses Google only for identity: tokens stay in memory for the userinfo call, are never persisted or logged, and the flow no longer requests offline access. Existing tokens are revoked at Google by a one-off script, then migration 005 drops the columns.
+
+**Alternatives considered:**
+- Encrypt the sign-in tokens: Rejected because nothing consumes them; it would keep a secret with no purpose.
+- Null the columns but keep them: Rejected because new code could start writing plaintext again; dropping removes the temptation.
+- Run the migration only (no revoke): Rejected because nulling leaves old Gmail/Drive grants live at Google.
+
+**Tradeoffs:**
+- Pro: smaller breach blast radius, less code, old broad grants closed
+- Con: if sign-in ever needs Google APIs, it must re-request consent; revoking may also invalidate a user's calendar connection (they reconnect)
+
+**Revisit when:**
+Sign-in itself needs offline access to a Google API.

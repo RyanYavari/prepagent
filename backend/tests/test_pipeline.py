@@ -146,7 +146,9 @@ def _run_pipeline(graph, sb):
     with (
         patch.object(pipeline, "_get_supabase", return_value=sb),
         patch.object(pipeline, "build_graph", return_value=graph),
+        patch.object(pipeline, "write_briefing_chunks") as writer,
     ):
+        _run_pipeline.writer = writer
         pipeline.run_pipeline(
             briefing_id="b-1",
             user_id="user-1",
@@ -170,6 +172,7 @@ def test_run_pipeline_success_lifecycle():
     state = graph.invoke.call_args.args[0]
     assert state["user_id"] == "user-1"
     assert state["company"] == "Stripe"
+    assert state["briefing_id"] == "b-1"
     assert state["warnings"] == []
     assert graph.invoke.call_args.kwargs["config"]["metadata"] == {"briefing_id": "b-1"}
 
@@ -194,7 +197,10 @@ def test_run_pipeline_failure_marks_failed(caplog):
         _run_pipeline(graph, sb)  # must not raise
 
     updates = _updates(sb)
-    assert updates[-1] == {"status": "failed"}
+    assert updates[-1] == {
+        "status": "failed",
+        "failure_reason": pipeline.REASON_ERROR,
+    }
     assert not any("content" in u for u in updates)
     assert "tavily down" in caplog.text
 
@@ -225,4 +231,52 @@ def test_run_pipeline_persist_error_marks_failed():
 
     _run_pipeline(graph, sb)
 
-    assert _updates(sb)[-1] == {"status": "failed"}
+    assert _updates(sb)[-1]["status"] == "failed"
+
+
+# --- briefing chunk writer wiring (specs/briefing-chunk-writer.md scenarios 5, 6, 7) ---
+
+
+def test_run_pipeline_writes_chunks_after_complete():
+    sb = _supabase_mock()
+    graph = MagicMock()
+    graph.invoke.return_value = {
+        "briefing_content": {"company_overview": {"summary": "x"}},
+        "warnings": [],
+    }
+    _run_pipeline(graph, sb)
+    args = _run_pipeline.writer.call_args.args
+    assert args[:4] == ("user-1", "b-1", "Stripe", "Backend Engineer")
+    assert args[4]["company_overview"]["summary"] == "x"
+    assert _updates(sb)[-1]["status"] == "complete"
+
+
+@pytest.mark.parametrize("error", [RuntimeError("openai down"), ValueError("no key")])
+def test_chunk_writer_failure_keeps_briefing_complete(error, caplog):
+    sb = _supabase_mock()
+    graph = MagicMock()
+    graph.invoke.return_value = {"briefing_content": {}, "warnings": []}
+
+    def boom(*a, **k):
+        raise error
+
+    with (
+        patch.object(pipeline, "_get_supabase", return_value=sb),
+        patch.object(pipeline, "build_graph", return_value=graph),
+        patch.object(pipeline, "write_briefing_chunks", side_effect=boom),
+        caplog.at_level("ERROR"),
+    ):
+        pipeline.run_pipeline("b-1", "user-1", "Stripe")  # must not raise
+
+    updates = _updates(sb)
+    assert updates[-1]["status"] == "complete"
+    assert not any(u.get("status") == "failed" for u in updates)
+    assert str(error) in caplog.text
+
+
+def test_failed_pipeline_writes_no_chunks():
+    sb = _supabase_mock()
+    graph = MagicMock()
+    graph.invoke.side_effect = RuntimeError("tavily down")
+    _run_pipeline(graph, sb)
+    _run_pipeline.writer.assert_not_called()

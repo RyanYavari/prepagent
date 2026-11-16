@@ -4,7 +4,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from openai import OpenAIError
-from supabase import create_client
 
 from agents.pipeline import run_pipeline
 from dependencies.auth import CurrentUser, get_current_user
@@ -16,8 +15,9 @@ from models.briefing import (
     BriefingSections,
     BriefingStatus,
 )
-from services.briefings import create_pending_briefing
+from services.briefings import create_pending_briefing, sweep_stale_running
 from services.embeddings import process_resume_embedding
+from services.supabase_client import create_client
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +108,12 @@ async def list_briefings(
     """List briefings for the authenticated user, newest first."""
     supabase = _get_supabase()
 
+    # Fail runs orphaned on `running` before listing; never let it break the list.
+    try:
+        sweep_stale_running(supabase, user.user_id)
+    except Exception:
+        logger.exception("Stale briefing sweep failed")
+
     try:
         result = (
             supabase.table("briefings")
@@ -192,5 +198,6 @@ async def get_briefing(
         interview_date=briefing.get("interview_date"),
         status=briefing["status"],
         content=content,
+        failure_reason=briefing.get("failure_reason"),
         created_at=briefing["created_at"],
     )

@@ -327,6 +327,10 @@ Section 1's test for a supervisor was "is there a branching decision that needs 
 
 The calendar layer is a classifier gate in front of an unchanged fixed DAG: the LLM extracts structured fields from untrusted event text, deterministic code decides whether to ignore, ask, or create a briefing, and by default it always asks.
 
+### Amendment (2026-11-15): sign-in stores no Google tokens
+
+Sign-in uses Google only for identity (see specs/signin-token-removal.md and docs/decisions.md). Tokens are never persisted; the only stored Google credential is the encrypted calendar refresh token above.
+
 ---
 
 ## Summary of changes from the README

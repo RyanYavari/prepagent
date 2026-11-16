@@ -27,7 +27,7 @@ def test_maps_tavily_results(monkeypatch):
         results = search_web("Stripe", max_results=3)
 
     ctor.assert_called_once_with(api_key="k")
-    client.search.assert_called_once_with(query="Stripe", max_results=3)
+    client.search.assert_called_once_with(query="Stripe", max_results=3, timeout=12.0)
     assert results == [
         SearchResult(title="Stripe", url="https://stripe.com", content="Payments"),
         SearchResult(url="https://example.com/news"),

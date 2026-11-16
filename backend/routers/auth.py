@@ -4,7 +4,6 @@ import os
 
 import jwt
 from fastapi import APIRouter, HTTPException, Query
-from supabase import create_client
 
 from models.user import AuthURLResponse, TokenResponse
 from services.google_auth import (
@@ -12,6 +11,7 @@ from services.google_auth import (
     build_authorization_url,
     exchange_code_for_tokens,
 )
+from services.supabase_client import create_client
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,10 @@ async def auth_callback(
     code: str = Query(..., description="OAuth authorization code"),
     state: str = Query(..., description="OAuth state issued by /auth/google"),
 ):
-    """Exchange OAuth code for tokens, upsert user, return session JWT."""
+    """Exchange OAuth code for identity, upsert user, return session JWT.
+
+    Google tokens are used in memory only and never stored or logged.
+    """
     # Exchange code for Google tokens + user info
     try:
         token_data = await exchange_code_for_tokens(code, state)
@@ -66,8 +69,6 @@ async def auth_callback(
         raise HTTPException(status_code=400, detail="Token exchange failed")
 
     email = token_data["email"]
-    access_token = token_data["access_token"]
-    refresh_token = token_data["refresh_token"]
 
     # Upsert user in Supabase
     try:
@@ -78,24 +79,8 @@ async def auth_callback(
 
         if existing.data:
             user = existing.data[0]
-            supabase.table("users").update(
-                {
-                    "google_access_token": access_token,
-                    "google_refresh_token": refresh_token,
-                }
-            ).eq("id", user["id"]).execute()
         else:
-            result = (
-                supabase.table("users")
-                .insert(
-                    {
-                        "email": email,
-                        "google_access_token": access_token,
-                        "google_refresh_token": refresh_token,
-                    }
-                )
-                .execute()
-            )
+            result = supabase.table("users").insert({"email": email}).execute()
             user = result.data[0]
     except Exception:
         logger.exception("Database error during user upsert")
