@@ -32,7 +32,7 @@ A public deployment (Vercel frontend, one small EC2 instance behind HTTPS for th
 ## Decisions
 
 ### 1. Backend runtime: Docker Compose on one EC2 instance, Caddy in front
-Chosen (revised 2026-11-16 for the AWS Free plan, see the tailoring note below): **one `t3.micro` (2 vCPU burstable x86_64, 1 GB) in `us-west-2`, Docker Compose with two services, `api` (uvicorn) and `caddy`**, EBS gp3 **10 GB**, a **2 GB swap file**, CPU credits in **standard** mode, an Elastic IP, domain `useprepagent.app` with an `A` record for `api.useprepagent.app`. (The original pick was a `t4g.small`, 2 GB ARM, 20 GB.) Caddy gets and renews the Let's Encrypt certificate itself (no certbot, no cron), redirects HTTP to HTTPS, and proxies to `api:8000` on the Docker network. The `api` port is not published to the host.
+Chosen (revised 2026-11-16 for the AWS Free plan, see the tailoring note below): **one `t3.micro` (2 vCPU burstable x86_64, 1 GB) in `us-east-2`, Docker Compose with two services, `api` (uvicorn) and `caddy`**, EBS gp3 **10 GB**, a **2 GB swap file**, CPU credits in **standard** mode, an Elastic IP, domain `useprepagent.app` with an `A` record for `api.useprepagent.app`. (The original pick was a `t4g.small`, 2 GB ARM, 20 GB.) Caddy gets and renews the Let's Encrypt certificate itself (no certbot, no cron), redirects HTTP to HTTPS, and proxies to `api:8000` on the Docker network. The `api` port is not published to the host.
 
 | Option | Cost vs the pick | Verdict |
 |---|---|---|
@@ -183,7 +183,8 @@ Live: https://<LIVE_URL_PLACEHOLDER> (frontend on Vercel) · API: https://api.<D
 ## Deployment tailoring (2026-11-16)
 The owner's concrete choices, applied to the runbook (`deploy/RUNBOOK.md`, now written as the Part B checklist with cost and verification per step):
 - Domain `useprepagent.app`; frontend on the **apex** (`FRONTEND_URL=https://useprepagent.app`, Google redirect URIs `https://useprepagent.app/auth/callback` and `/calendar/callback`), `www` redirects to it; API `https://api.useprepagent.app`.
-- AWS Free plan, $100 credits, plan ends 16 May 2027 **(confirm)**; one region, `us-west-2`; `t3.micro` x86_64, 10 GB gp3, 2 GB swap file, CPU-credit mode **standard** (T3 launches unlimited by default, which can bill surplus credits). No code or script change was needed: `Caddyfile` and `docker-compose.prod.yml` take the domain from `DOMAIN`, and nothing pins an architecture.
+- AWS Free plan, $100 credits, plan ends 16 May 2027 **(confirm)**; one region, `us-east-2`; `t3.micro` x86_64, 10 GB gp3, 2 GB swap file, CPU-credit mode **standard** (T3 launches unlimited by default, which can bill surplus credits). No code or script change was needed: `Caddyfile` and `docker-compose.prod.yml` take the domain from `DOMAIN`, and nothing pins an architecture.
+- Region changed from `us-west-2` to **`us-east-2` (Ohio)** on 2026-11-16 because the owner's AWS project is fixed to Ohio. Prices used here (t3.micro $0.0104/h, gp3 $0.08/GB-month, public IPv4 $0.005/h) are the same in both regions as far as general knowledge goes **(confirm)**. `render-env.sh` now passes the region explicitly, since the AWS CLI on EC2 does not necessarily infer it.
 - Teardown checklist added (runbook section 12), because the Free plan closes the account at its end and an Elastic IP or detached volume left behind keeps billing.
 - **Gap found while tailoring: no migration creates `users` or `briefings`** (`supabase/migrations` starts at `002` and references them). A new production Supabase project cannot be built from `002`-`007` alone; the runbook says to take a schema-only dump of the dev project and apply it first. Fixing this properly (a committed `001_base_schema.sql`) is a separate change.
 - Still unverified: everything in the runbook, the Docker build on a 1 GB instance, memory and swap behaviour under a pipeline run, and the disk budget on 10 GB.
@@ -193,7 +194,7 @@ Fixed infrastructure (US region list prices, approximate, **confirm** with the A
 
 | Item | Free-tier Supabase + Vercel Hobby | With Supabase Pro |
 |---|---|---|
-| EC2 `t3.micro` on-demand, us-west-2 (was `t4g.small` ~$12.3) | ~$7.6 | ~$7.6 |
+| EC2 `t3.micro` on-demand, us-east-2 (was `t4g.small` ~$12.3) | ~$7.6 | ~$7.6 |
 | EBS gp3 10 GB (was 20 GB ~$1.6) | ~$0.8 | ~$0.8 |
 | Public IPv4 / Elastic IP | ~$3.7 | ~$3.7 |
 | Data transfer, SSM parameters, Let's Encrypt, uptime monitor, Caddy | $0 | $0 |
