@@ -10,17 +10,19 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-COMPOSE=(docker compose -f "$REPO/deploy/docker-compose.prod.yml" --env-file /etc/prepagent/deploy.conf)
-STATE=/etc/prepagent/current_tag
+# Config directory; only the tests override it.
+ETC_DIR="${PREPAGENT_ETC:-/etc/prepagent}"
+COMPOSE=(docker compose -f "$REPO/deploy/docker-compose.prod.yml" --env-file "$ETC_DIR/deploy.conf")
+STATE="$ETC_DIR/current_tag"
 KEEP_IMAGES=3
 
 ASSUME_YES=0
 [ "${1:-}" = "--yes" ] && ASSUME_YES=1
 
-[ -f /etc/prepagent/deploy.conf ] || { echo "missing /etc/prepagent/deploy.conf (DOMAIN=...)" >&2; exit 1; }
+[ -f "$ETC_DIR/deploy.conf" ] || { echo "missing $ETC_DIR/deploy.conf (DOMAIN=...)" >&2; exit 1; }
 # shellcheck disable=SC1091
-DOMAIN="$(. /etc/prepagent/deploy.conf && echo "$DOMAIN")"
-[ -n "$DOMAIN" ] || { echo "DOMAIN is empty in /etc/prepagent/deploy.conf" >&2; exit 1; }
+DOMAIN="$(. "$ETC_DIR/deploy.conf" && echo "$DOMAIN")"
+[ -n "$DOMAIN" ] || { echo "DOMAIN is empty in $ETC_DIR/deploy.conf" >&2; exit 1; }
 
 cd "$REPO"
 git fetch origin main
@@ -28,6 +30,10 @@ git checkout main
 git merge --ff-only origin/main
 TAG="$(git rev-parse --short=12 HEAD)"
 PREV="$(cat "$STATE" 2>/dev/null || true)"
+# The compose file requires IMAGE_TAG and compose interpolates it for every subcommand
+# (`ps` included), so export it once for all calls below. The rollback `up` overrides it
+# with the previous tag.
+export IMAGE_TAG="$TAG"
 echo "deploy: new tag $TAG (previous: ${PREV:-none})"
 
 if [ "$ASSUME_YES" -ne 1 ]; then

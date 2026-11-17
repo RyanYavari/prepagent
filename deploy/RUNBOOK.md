@@ -222,12 +222,18 @@ Do **not** run `docker compose config` or `docker inspect` and paste the output 
 
 ## 7. Smoke test (every release: 1-6; at launch and after config changes: all)
 
+Compose needs `IMAGE_TAG` and `DOMAIN` for **every** subcommand (`logs`, `stop`, `down` too), or it stops with "required variable ... is missing a value". On the instance, define this helper once per session and use it wherever this runbook says `dc`:
+```bash
+dc() { sudo env IMAGE_TAG="$(sudo cat /etc/prepagent/current_tag)" docker compose \
+  -f /opt/prepagent/deploy/docker-compose.prod.yml --env-file /etc/prepagent/deploy.conf "$@"; }
+```
+
 1. `https://api.useprepagent.app/health` returns `{"status":"ok"...}` with a valid certificate; `http://` redirects to `https://`; `/docs` and `/openapi.json` return 404.
 2. CORS: `curl -si -X OPTIONS https://api.useprepagent.app/briefings -H 'Origin: https://useprepagent.app' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization,content-type'` allows that origin and sends no `Access-Control-Allow-Credentials`; the same with `Origin: https://example.com` returns no `Access-Control-Allow-Origin`.
 3. Sign in as yourself through the real frontend at `https://useprepagent.app` (an unlisted Google account must be refused by Google).
 4. Create a briefing without a job description; the viewer polls to `complete`.
 5. Create one with a job description (the chip shows); a 12,001-character one is a 422 that does not echo it; a body over 512 KB is a 413.
-6. Logs: put unique marker strings in company, interviewer, resume and job description, then `sudo docker compose -f /opt/prepagent/deploy/docker-compose.prod.yml logs api caddy | grep -c <marker>` must be 0 for each; the `/auth/callback` log line has no `code=` or `state=`.
+6. Logs: put unique marker strings in company, interviewer, resume and job description, then `dc logs api caddy | grep -c <marker>` must be 0 for each; the `/auth/callback` log line has no `code=` or `state=`.
 7. Caps: temporarily set `MAX_BRIEFINGS_PER_USER_PER_DAY=1` in SSM, re-render and recreate (section 8), confirm a `429` with `Retry-After` and the message on `/prep/new`; restore.
 8. Kill switches: `BRIEFINGS_ENABLED=false` gives 503 on create and reads still work; `SIGNUPS_ENABLED=false` refuses a new email (403) and still lets you in.
 9. Restart the container mid sign-in: it returns healthy and the startup sweep logs; the interrupted sign-in just needs a retry.
@@ -250,7 +256,7 @@ Edit the SSM parameter, then on the instance:
 
 `ALLOWED_EMAILS` and `SIGNUPS_ENABLED` are checked at sign-in only: someone already signed in keeps API access until their session expires (7 days, no revocation). To cut a user off now, rotate `JWT_SECRET` (signs everyone out) or use `BRIEFINGS_ENABLED=false`.
 
-Emergency order, fastest first: (1) `BRIEFINGS_ENABLED=false`; (2) revoke the Anthropic / OpenAI key; (3) `sudo docker compose ... stop api`; (4) rotate `JWT_SECRET`; (5) remove test users in the Google console, or pause the Vercel project.
+Emergency order, fastest first: (1) `BRIEFINGS_ENABLED=false`; (2) revoke the Anthropic / OpenAI key; (3) `dc stop api`; (4) rotate `JWT_SECRET`; (5) remove test users in the Google console, or pause the Vercel project.
 
 ## 9. Rollback
 
@@ -288,7 +294,7 @@ Do this when you stop, and no later than **15 May 2027**. Order matters (an Elas
 1. [ ] **Vercel**: Project > Settings > Domains > remove `useprepagent.app` and `www`; Settings > Advanced > Delete Project. (Hobby costs $0, but this stops serving a dead site.) Verify: the project is gone from the dashboard.
 2. [ ] **DNS records**: delete the `api`, apex and `www` records so nothing points at a released IP (dangling-record takeover). If Route 53 hosts the zone, delete the records first, then the hosted zone (~$0.50/mo): Route 53 > Hosted zones > delete. Verify: `dig +short api.useprepagent.app` is empty.
 3. [ ] **Domain**: turn **auto-renew off** (Route 53 > Registered domains, or the registrar). Registration is paid up front and is not refunded; it is a separate renewal charge each year. Verify: auto-renew shows Off.
-4. [ ] **EC2 instance**: stop the API first if you want a clean shutdown (`sudo docker compose -f /opt/prepagent/deploy/docker-compose.prod.yml down`), then EC2 > Instances > **Terminate**. Verify: state `terminated`. The root volume goes with it only because "delete on termination" was Yes.
+4. [ ] **EC2 instance**: stop the API first if you want a clean shutdown (`dc down`, defined in section 7), then EC2 > Instances > **Terminate**. Verify: state `terminated`. The root volume goes with it only because "delete on termination" was Yes.
 5. [ ] **EBS volumes**: EC2 > Volumes: none left in us-east-2 (`available` volumes bill). Delete any. Also EC2 > Snapshots and AMIs: none.
 6. [ ] **Elastic IP**: EC2 > Elastic IPs > Disassociate, then **Release** (an unassociated EIP bills ~$3.7/mo). Verify: the Elastic IPs list is empty.
 7. [ ] **Security group** `prepagent-prod`: delete after the instance is gone.
