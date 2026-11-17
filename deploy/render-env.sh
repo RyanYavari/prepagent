@@ -28,8 +28,10 @@ aws ssm get-parameters-by-path --region "$REGION" \
 
 # Values with a newline would corrupt an env file (and could smuggle extra variables).
 # Check the number of lines against the number of parameters; print names only.
+# The CLI paginates (10 parameters per page) and applies --query to every page, so this
+# prints one number per page ("10" then "2" for 12 parameters): add them up.
 EXPECTED="$(aws ssm get-parameters-by-path --region "$REGION" --path "$PREFIX" --recursive \
-  --query 'length(Parameters)' --output text)"
+  --query 'length(Parameters)' --output text | awk '{ n += $1 } END { print n + 0 }')"
 ACTUAL="$(wc -l <"$TMP" | tr -d ' ')"
 if [ "$EXPECTED" != "$ACTUAL" ] || [ "$ACTUAL" -eq 0 ]; then
   echo "render-env: expected $EXPECTED parameter(s) under $PREFIX but rendered $ACTUAL line(s)." >&2
