@@ -91,7 +91,7 @@ Nothing here is run by an agent. Do the steps in order; stop and ask before anyt
 ### B3. AWS ($ EC2, EBS, public IPv4)
 - [ ] IAM role for the instance: `AmazonSSMManagedInstanceCore` plus read on `/prepagent/prod/*` SSM parameters only
 - [ ] SSM Parameter Store: one SecureString per backend variable under `/prepagent/prod/` (values from a file or stdin, never an argument)
-- [ ] $ Launch `t3.micro` (x86_64, us-west-2), Amazon Linux 2023, 10 GB gp3, CPU credits standard, 2 GB swap file, IMDSv2 required, role attached, security group 80/443 only (no 22 unless Q9 says so)
+- [ ] $ Launch `t3.micro` (x86_64, us-east-2), Amazon Linux 2023, 10 GB gp3, CPU credits standard, 2 GB swap file, IMDSv2 required, role attached, security group 80/443 only (no 22 unless Q9 says so)
 - [ ] $ Allocate and attach an Elastic IP; DNS `A` record `api.<domain>` to it
 - [ ] Install Docker and the Compose plugin; enable unattended security updates; clone the repo at the release SHA
 

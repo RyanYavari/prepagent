@@ -9,14 +9,14 @@ Operator steps for specs/deployment.md. **Nothing here is run by an agent.** Eve
 | Domain | `useprepagent.app` (`.app` is HSTS-preloaded: browsers refuse plain http, which is fine here, everything is https) |
 | Frontend | Vercel, canonical origin **`https://useprepagent.app`** (the apex). `www.useprepagent.app` redirects to it |
 | API | `https://api.useprepagent.app`, one EC2 instance |
-| AWS | Free plan, $100 credits, plan ends **16 May 2027**. One region: **`us-west-2` (Oregon)**. Use it for every command below (`--region us-west-2`) |
+| AWS | Free plan, $100 credits, plan ends **16 May 2027**. One region: **`us-east-2` (Ohio)**. Use it for every command below (`--region us-east-2`) |
 | Instance | `t3.micro` (x86_64, 2 vCPU burstable, 1 GB RAM), Amazon Linux 2023 x86_64, **10 GB gp3**, **2 GB swap file**, Docker Compose + Caddy |
 | Google OAuth | Testing mode, invite list |
 | Supabase | new production project (free plan) |
 
 Prices are US-region list prices from general knowledge, marked **(confirm)**: check them in the AWS console / pricing calculator before relying on them.
 
-### Expected monthly cost (us-west-2, on-demand, taxes excluded) **(confirm)**
+### Expected monthly cost (us-east-2, on-demand, taxes excluded) **(confirm)**
 
 | Item | Per month | Notes |
 |---|---|---|
@@ -40,7 +40,7 @@ Credit arithmetic: today (16 Nov 2026) to 16 May 2027 is about 6 months, so abou
   - Verify: `git log origin/main --oneline | head -3` shows the deployment commit.
 
 ### 1.2 Production Supabase project (free plan)
-- [ ] Create a new project (region near us-west-2, for example `West US (Oregon)`). Save the database password in a password manager.
+- [ ] Create a new project (region near us-east-2, for example `East US (Ohio)`). Save the database password in a password manager.
 - [ ] Enable the `vector` extension (Database > Extensions), or let migration 002 do it.
 - [ ] **Blocker to resolve first: the repo has no migration that creates `users` or `briefings`.** `supabase/migrations` starts at `002`, and `002`, `004`, `005`, `006` all reference tables created earlier by hand in the dev project. Applying `002`-`007` to an empty project fails. Take a schema-only dump of the **dev** project (`supabase db dump --schema public -f base_schema.sql` or `pg_dump --schema-only --no-owner`), read it, remove anything not wanted, and apply it to the production project **before** `002`. Do not copy data. (Better: commit it as `001_base_schema.sql` in a separate change.) The dump includes the old `users.google_*_token` columns; that is fine on an empty table, `005` then drops them.
 - [ ] Apply `002` to `007` in order in the SQL editor (`007` is optional, `006` is needed for the chunk writer).
@@ -74,7 +74,7 @@ python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().
 ```
 Keep both in a password manager. Losing `TOKEN_ENCRYPTION_KEY` forces every Calendar reconnect.
 
-### 1.6 What goes into SSM Parameter Store (as SecureString, under `/prepagent/prod/`, in us-west-2)
+### 1.6 What goes into SSM Parameter Store (as SecureString, under `/prepagent/prod/`, in us-east-2)
 | Parameter (exact env var name) | Value | Secret? |
 |---|---|---|
 | `SUPABASE_URL` | production project URL | no, but store anyway |
@@ -117,9 +117,9 @@ Where the domain is registered decides where DNS lives. Pick one:
 Remove any existing `AAAA` record on the apex and any leftover parking records. Do not add a CAA record unless it allows both Let's Encrypt and Vercel's CA.
 - Verify later: `dig +short api.useprepagent.app` returns the Elastic IP; `dig +short useprepagent.app` returns the Vercel address.
 
-## 3. AWS (us-west-2): about $12/month total once everything exists
+## 3. AWS (us-east-2): about $12/month total once everything exists
 
-All steps in `us-west-2`: set the region selector in the console first (top right). The default VPC is used.
+All steps in `us-east-2`: set the region selector in the console first (top right). The default VPC is used.
 
 ### 3.1 IAM role for the instance (free)
 - [ ] IAM > Roles > Create role > AWS service > EC2. Attach managed policy `AmazonSSMManagedInstanceCore`. Name it `prepagent-prod-ec2`.
@@ -127,10 +127,10 @@ All steps in `us-west-2`: set the region selector in the console first (top righ
   ```json
   {"Version":"2012-10-17","Statement":[{"Effect":"Allow",
     "Action":["ssm:GetParametersByPath","ssm:GetParameters"],
-    "Resource":"arn:aws:ssm:us-west-2:<ACCOUNT_ID>:parameter/prepagent/prod/*"}]}
+    "Resource":"arn:aws:ssm:us-east-2:<ACCOUNT_ID>:parameter/prepagent/prod/*"}]}
   ```
   (No `kms:Decrypt` needed for the default `aws/ssm` key.)
-- Verify: the role page lists both policies; the resource ARN has your account id and `us-west-2`.
+- Verify: the role page lists both policies; the resource ARN has your account id and `us-east-2`.
 
 ### 3.2 Security group (free)
 - [ ] EC2 > Security Groups > Create, name `prepagent-prod`, default VPC. Inbound: **TCP 80** and **TCP 443** from `0.0.0.0/0`, and **UDP 443** (HTTP/3, optional). **No port 22.** Leave outbound as is.
@@ -190,12 +190,13 @@ sudo dnf install -y dnf-automatic && sudo systemctl enable --now dnf-automatic-i
 
 One parameter per row of the table in 1.6, under `/prepagent/prod/`, named exactly like the env var. Run from your laptop with the admin profile (the instance role is read-only). Put each value in a file with an editor, never `echo` and never as a command argument:
 ```bash
-aws ssm put-parameter --region us-west-2 --name /prepagent/prod/ANTHROPIC_API_KEY \
+aws ssm put-parameter --region us-east-2 --name /prepagent/prod/ANTHROPIC_API_KEY \
   --type SecureString --value file://./anthropic.key --overwrite
 rm -P ./anthropic.key      # macOS secure delete (shred -u on Linux)
 ```
+`deploy/render-env.sh` reads the parameters from `us-east-2` (override with `AWS_REGION`), so they must be created in that region.
 Non-secret values (`FRONTEND_URL`, `SIGNUPS_ENABLED`, `ALLOWED_EMAILS`) go in the same way for consistency.
-- Verify (names only): `aws ssm get-parameters-by-path --region us-west-2 --path /prepagent/prod/ --query 'Parameters[].Name' --output text` lists all 12 names. Do **not** use `--with-decryption` on your laptop screen-share. On the instance: `sudo deploy/render-env.sh` (step 5 runs it) prints `wrote 12 variable(s)`.
+- Verify (names only): `aws ssm get-parameters-by-path --region us-east-2 --path /prepagent/prod/ --query 'Parameters[].Name' --output text` lists all 12 names. Do **not** use `--with-decryption` on your laptop screen-share. On the instance: `sudo deploy/render-env.sh` (step 5 runs it) prints `wrote 12 variable(s)`.
 
 ## 5. First backend deploy (free; the image build uses CPU credits and about 1 GB of disk)
 
@@ -288,10 +289,10 @@ Do this when you stop, and no later than **15 May 2027**. Order matters (an Elas
 2. [ ] **DNS records**: delete the `api`, apex and `www` records so nothing points at a released IP (dangling-record takeover). If Route 53 hosts the zone, delete the records first, then the hosted zone (~$0.50/mo): Route 53 > Hosted zones > delete. Verify: `dig +short api.useprepagent.app` is empty.
 3. [ ] **Domain**: turn **auto-renew off** (Route 53 > Registered domains, or the registrar). Registration is paid up front and is not refunded; it is a separate renewal charge each year. Verify: auto-renew shows Off.
 4. [ ] **EC2 instance**: stop the API first if you want a clean shutdown (`sudo docker compose -f /opt/prepagent/deploy/docker-compose.prod.yml down`), then EC2 > Instances > **Terminate**. Verify: state `terminated`. The root volume goes with it only because "delete on termination" was Yes.
-5. [ ] **EBS volumes**: EC2 > Volumes: none left in us-west-2 (`available` volumes bill). Delete any. Also EC2 > Snapshots and AMIs: none.
+5. [ ] **EBS volumes**: EC2 > Volumes: none left in us-east-2 (`available` volumes bill). Delete any. Also EC2 > Snapshots and AMIs: none.
 6. [ ] **Elastic IP**: EC2 > Elastic IPs > Disassociate, then **Release** (an unassociated EIP bills ~$3.7/mo). Verify: the Elastic IPs list is empty.
 7. [ ] **Security group** `prepagent-prod`: delete after the instance is gone.
-8. [ ] **SSM parameters**: delete all under `/prepagent/prod/` (`aws ssm delete-parameters --region us-west-2 --names ...`, or console). Verify: `aws ssm get-parameters-by-path --region us-west-2 --path /prepagent/prod/` returns an empty list. They are free, but they hold live secrets: delete them.
+8. [ ] **SSM parameters**: delete all under `/prepagent/prod/` (`aws ssm delete-parameters --region us-east-2 --names ...`, or console). Verify: `aws ssm get-parameters-by-path --region us-east-2 --path /prepagent/prod/` returns an empty list. They are free, but they hold live secrets: delete them.
 9. [ ] **IAM**: delete role `prepagent-prod-ec2` (and its instance profile) and any IAM user/access key created for this project.
 10. [ ] **Budgets / alarms**: delete the AWS Budget and any CloudWatch alarms or dashboards you created; a Cost Explorer check next day should show $0.
 11. [ ] **Check the whole region and others**: Billing > Cost Explorer grouped by Service and Region (next day), plus EC2 > Global view. Anything unexpected in another region means a resource was created there by mistake.
@@ -304,5 +305,5 @@ After teardown: set the README Deployment section back to "not live".
 ## 13. Free-plan facts to confirm in your own console
 
 - The plan end date (Billing > Credits) is 16 May 2027, and what happens to the account then (closure after the Free plan, a 90-day window to upgrade and recover **(confirm)**).
-- The Free plan allows `t3.micro` in `us-west-2`, Route 53 domain registration, and Budgets.
+- The Free plan allows `t3.micro` in `us-east-2`, Route 53 domain registration, and Budgets.
 - Public IPv4 and Elastic IP charges are drawn from credits.
