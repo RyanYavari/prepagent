@@ -79,19 +79,51 @@ AI-powered interview research tool. Users sign in with Google, enter a company +
 - `services/net_config.py`: all limits read from env at call time, bad values fall back to defaults. `LLM_TIMEOUT_SECONDS`=45 / `LLM_MAX_RETRIES`=1, `EMBEDDING_TIMEOUT_SECONDS`=15 / `EMBEDDING_MAX_RETRIES`=2, `TAVILY_TIMEOUT_SECONDS`=12 / `TAVILY_MAX_RETRIES`=1, `SUPABASE_TIMEOUT_SECONDS`=10 / `SUPABASE_MAX_RETRIES`=2, `GOOGLE_TIMEOUT_SECONDS`=10 / `GOOGLE_MAX_RETRIES`=1 (Google OAuth + Calendar: reads/refresh/revoke retry any transport error; the single-use auth-code exchange retries connect errors only; sign-in `flow.fetch_token` gets the timeout too), `PIPELINE_DEADLINE_SECONDS`=120, `STALE_RUNNING_MINUTES`=10. `retry_call` logs the exception class only, never its message
 - `services/supabase_client.py`: every module builds its client via `create_client` here (timeout set); `execute(builder)` retries connect-class errors only (never read timeouts, so inserts are not duplicated). Used for the pipeline's own calls (status updates, retrieval, chunk writer, sweep); request-path routers get timeouts but no retry. Do not inject a shared `httpx_client` into supabase: it drops the base URL and `apikey` header
 - `agents/pipeline.py`: graph runs in a worker thread with an overall deadline; on timeout the row is `failed` with a generic `failure_reason` and a cancel flag stops the straggler before its next node. Every node logs `node=… briefing_id=… event=start|end|error elapsed=…` and the run logs `pipeline … event=end status=… elapsed=…` (ids and timings only)
-- `services/briefings.py` `sweep_stale_running`: `running` rows older than `STALE_RUNNING_MINUTES` (by `created_at`) become `failed`; runs at startup (`main._startup_sweep`, all users) and on `GET /briefings` (that user). Only `running` is swept; a `pending` row orphaned by a restart is not
+- `services/briefings.py` `sweep_stale_running`: `running` rows older than `STALE_RUNNING_MINUTES` (by `created_at`) become `failed`; runs at startup (`main._startup_sweep`, all users) and on `GET /briefings` (that user). `sweep_stale_pending` does the same for old `pending` rows (added by the deployment work)
 - Migration `007_briefing_failure_reason.sql` adds `briefings.failure_reason`; optional for correctness (writes fall back to status-only when the column is missing). `BriefingResponse.failure_reason` is returned but the frontend does not show it yet
 - Not re-run against real services; tests are mocked. A straggler thread cannot be killed, it only stops at the next node boundary and is bounded by per-call timeouts
+
+### ✅ Complete (Week 3, RAGAS eval harness) — specs/ragas-eval-harness.md
+- `backend/evals/`: `python -m evals.run` (from backend/) runs `build_graph()` over `golden_v1.json` (9 synthetic cases, short resume-side `reference` fact lists; interviewers labelled `public_figure`/`fictional`), scores with ragas 0.4.3 collections metrics (faithfulness per company/interviewer/synthesis group, answer relevancy, context precision/recall) and writes `evals/results/<UTC>[-label].json` plus a terminal table. `python -m evals.compare A.json B.json` diffs two runs and lists every differing meta field (prompt hashes, models, dataset)
+- Harness-only seams, no production code changed: in-memory retrieval (no Supabase), wrapped `search_web` recording raw web results (+ `--web-cache record|replay`, gitignored `evals/cache/`), counted LLM calls. Prior-briefing chunks are never a scored context; they feed a with-prior faithfulness diagnostic
+- Controls: `--limit N` (default 3) / `--cases id1,id2` / `--all`, `--metrics` (context recall and the prior diagnostic are opt-in), `--rescore` (reuse cached briefings, judge only), a preflight that prints per-model call estimates and refuses above `--max-llm-calls` (default 150, no override; the cap also stops a run mid-way, partial results marked `truncated`), `--dry-run`, `--repeat`. Refuses under `CI`/pytest. Needs `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` (answer-relevancy embeddings), `TAVILY_API_KEY` (not for replay)
+- Judge model: `JUDGE_MODEL` (default `claude-sonnet-5-5`, which equals the default `AGENT_MODEL`, so default runs are flagged self-grading and optimistic). Changing the judge or metric version makes scores non-comparable: `golden_v1.json` is the Opus-judged, metric-v1 baseline. Optional LangSmith score feedback when `LANGSMITH_TRACING`+key are set
+- Thresholds (0.85/0.80/0.70/0.75) are reported, not a gate. Context recall is ~1.0 by construction (retrieval returns every chunk)
+- Real smoke run (2 cases, 34 calls) worked; first numbers: faithfulness company 1.00, interviewer 0.88, **synthesis 0.54-0.57** (the weak spot ADR section 5 predicted), relevancy 0.74-0.85. Judge `max_tokens` had to be 12000 (4096 truncated the faithfulness verdict JSON). No full 9-case baseline recorded yet. Eval unit tests are mocked and live in `tests/evals/`
+
+### ✅ Complete (Week 3, Job description input) — specs/job-description-input.md
+- `BriefingCreate.job_description` (optional, `max_length=12_000`, over the limit is a 422, never truncated; `clean_long_text` in `models/text_safety.py` strips control/format chars, keeps URLs and `<>{}`). Whitespace-only becomes `None`. `main.py` validation handler drops `input` from errors for this field only
+- **Request-scoped: never stored, logged, put in run metadata, or embedded.** No migration. Flows `create_pending_briefing` -> `run_pipeline(job_description=...)` -> `PipelineState.job_description` -> `synthesis_node` only (company/interviewer nodes never see it). `write_briefing_chunks` has no JD parameter. Calendar briefings never carry one (`briefing_fields` has no JD input)
+- Synthesis: JD goes in `untrusted_block("job_description", ...)`; with a JD the "No job description is provided" sentence is swapped for `JD_SENTENCE` (requirements must come from it and end with `[JD]`); with no JD the prompt is byte-identical (synthesis hash `f7be121b67df`). `UNTRUSTED_RULE` is deliberately unchanged. `[JD]` is a bare tag valid only when a JD was supplied; with a JD every `key_requirements` item must carry it or is dropped (counted in the existing "Removed N" warning); a JD alone counts as usable context
+- Viewer: `[JD]` renders a "Job description" chip (`lib/citations.ts`, `CitedText.tsx`) and the Key requirements heading gets a "From job description" label; `/prep/new` has the textarea with a counter (no `maxLength`, so a paste is never silently truncated; submit blocked over 12,000; `lib/briefingForm.ts`)
+- Evals: `golden_v2.json` = v1 + synthetic JDs on stripe/datadog/mercury (**never edit it: its sha256 `180f3b52...` is recorded in the baselines**; `golden_v1.json` is also untouched), `--jd on|off` (default on; `off` strips the JD), JD is a scored context for the three synthesis faithfulness groups only, cache file gets a `-jd` suffix so the two arms do not overwrite each other. Committed snapshots `evals/baselines/golden_v2_sonnet_metric_v2_jd_{off,on}.json` (label `sonnet-judge-metric-v2-jd-spike`): factual synthesis faithfulness 0.56 -> 0.99, prescriptive 0.74 -> 0.91, 29/29 `key_requirements` tagged, 0 dropped. 3 clean synthetic JDs, self-graded: a best case, not a real-posting result
+- With `LANGSMITH_TRACING` on, the synthesis prompt (JD included) goes to LangSmith, as the resume does. Paraphrased requirements are stored in `content` and embedded as same-company prior briefings (background only); a later briefing for a different role could be nudged by them
+- **Not verified yet:** the `/prep/new` form and the viewer indicator in a real browser, and a live synthesis smoke call with a JD through the real API path (the eval ran the synthesis node via the harness, not POST /briefings)
+
+### ✅ Complete (Deployment readiness, repo changes) — specs/deployment.md (branch `deploy/prod-readiness`)
+- **Not live.** Backend on EC2 (Docker Compose + Caddy, `deploy/`), frontend on Vercel; the owner runs `deploy/RUNBOOK.md` by hand. Nothing here created a cloud resource
+- **`--workers 1` is required** (never `--reload`): the PKCE verifier stores (`services/google_auth.py`, capped at `MAX_PENDING_STATES`) and the per-IP limiter (`services/rate_limit.py`) are process memory. Startup warns if `WEB_CONCURRENCY`/`UVICORN_WORKERS` > 1
+- `APP_ENV=production` (`services/prod_config.py`): startup refuses (names only, never values) on missing required vars, `JWT_SECRET` weak/default, bad `TOKEN_ENCRYPTION_KEY`, or `FRONTEND_URL` not https / trailing slash / localhost; `/docs` and OpenAPI off. `get_jwt_secret()` never falls back to the dev secret in production
+- Cost controls (`services/limits.py`, counted from the `briefings` table, fail closed): `MAX_BRIEFINGS_PER_USER_PER_DAY`=3, `MAX_BRIEFINGS_GLOBAL_PER_DAY`=20, `MAX_ACTIVE_BRIEFINGS_PER_USER`=2 (only rows younger than `STALE_RUNNING_MINUTES` count, so orphans never lock a user out). Enforced in `create_pending_briefing` (calendar included) and before the resume embedding in `POST /briefings`; 429 + `Retry-After`, generic messages. Kill switches: `SIGNUPS_ENABLED`, `ALLOWED_EMAILS`, `BRIEFINGS_ENABLED` (503), `CALENDAR_ENABLED` (404). The caps do not guarantee the $20 budget: set provider-side spend limits
+- Rate limits: `RATE_LIMIT_AUTH_PER_MINUTE`=20 on `/auth/*`, `RATE_LIMIT_GLOBAL_PER_MINUTE`=120, `/health` exempt; keyed on the peer address uvicorn resolves (`--proxy-headers`), never on a header the app reads. The limiter middleware is added before CORS so a 429 still carries CORS headers (`Retry-After` is exposed)
+- Handlers that make blocking Supabase/OpenAI calls are plain `def` (thread pool), not `async def`; handlers that `await` Google (`calendar_callback`, `disconnect_calendar`, `sync_calendar`) are still `async def` and make short blocking Supabase calls inside
+- Log hygiene: `services/log_safety.py` `log_failure` logs the exception class only on paths that handle user text (resume save/embed, briefing create, sign-in upsert, calendar confirm/auto-create), because Postgres errors echo the failing row. Do not turn these back into `logger.exception`
+- Known gap: with `CALENDAR_AUTO_CONFIDENCE_THRESHOLD` below 1 (auto-run, off by default) `sync_user_calendar` calls `create_pending_briefing` on the event loop and takes `creation_lock`, which a slow create can hold for ~45 s: keep auto-run off in production
+- `sweep_stale_pending` also fails old `pending` rows (startup and `GET /briefings`)
+- CORS: single origin, `allow_credentials=False`, methods GET/POST/DELETE/OPTIONS, headers Authorization/Content-Type
+- `backend/Dockerfile`, `.dockerignore` (excludes `.env*`), `requirements-runtime.txt` (tests pass on this set; the full `requirements.txt` stays for dev/evals). Frontend: `lib/api.ts` (`API_URL`; throws in a Vercel production build when `NEXT_PUBLIC_API_URL` is unset or not https), security headers + Report-Only CSP in `next.config.ts`, 429/503 copy on `/prep/new`, calendar panel hides on the disabled-404
+- **Unverified:** Docker image build and run, the Caddyfile (including the 512 KB limit and query stripping), every `deploy/*.sh` script (syntax only), the frontend changes in a real browser, and everything in the runbook
 
 ### ❌ Not Started (Week 2+)
 - **supervisor.py** stays empty: fixed DAG, no supervisor
 - **Services**: gmail.py, calendar.py, drive.py, eval.py all empty
-- **RAGAS evaluation**: Not implemented
 
 ### Next Task
 1. **Manually verify the briefing viewer in a browser** (the calendar flow is already verified)
 2. Apply migrations 006 and 007 (007 optional), then smoke-test the chunk writer with real keys (run two briefings for one company)
-3. Next feature: spec it first with /spec (RAGAS evaluation per ADR §5 is the largest open item)
+3. Verify the job description form and viewer in a browser, and run a live smoke call through POST /briefings with a JD
+4. Run the full eval (`python -m evals.run --all --web-cache record --label baseline`, ~200 calls) and save it as the baseline; investigate the low synthesis faithfulness (0.54-0.57)
+5. Next feature: spec it first with /spec
 
 ## Stack
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain, Claude Sonnet
@@ -110,6 +142,12 @@ cd backend && uvicorn main:app --reload
 ruff check . --fix
 ruff format .
 pytest -x -q
+
+# Evals (real API calls, costs money; never in CI)
+cd backend && python -m evals.run --dry-run
+python -m evals.run --limit 2 --web-cache record --label my-change   # real run; caches briefings
+python -m evals.run --rescore --metrics faithfulness --limit 4         # judge only, reuses cached briefings
+python -m evals.compare evals/results/A.json evals/results/B.json
 
 # Frontend
 cd frontend && npm run dev

@@ -209,3 +209,67 @@ def test_retrieval_round_trip_scenario_2(sb):
     assert len(got.briefing_chunks) == 4
     assert other.briefing_chunks == []
     assert other_user.briefing_chunks == []
+
+
+# --- job description is never embedded (specs/job-description-input.md) ---
+
+JD_MARKER = "UNIQUE-JD-MARKER-4d2b"
+JD_TEXT = f"Backend Engineer. Requirements: 4+ years of Go. {JD_MARKER}"
+
+
+def test_writer_signature_has_no_job_description_parameter():
+    import inspect
+
+    assert list(inspect.signature(write_briefing_chunks).parameters) == [
+        "user_id",
+        "briefing_id",
+        "company",
+        "role",
+        "content",
+    ]
+
+
+def test_pipeline_does_not_hand_the_jd_to_the_chunk_writer():
+    from agents import pipeline
+
+    graph = MagicMock()
+    graph.invoke.return_value = {"briefing_content": {}, "warnings": []}
+    with (
+        patch.object(pipeline, "_get_supabase", return_value=MagicMock()),
+        patch.object(pipeline, "build_graph", return_value=graph),
+        patch.object(pipeline, "write_briefing_chunks") as writer,
+    ):
+        pipeline.run_pipeline("b-1", "u-1", "Stripe", None, "Backend", JD_TEXT)
+    assert JD_MARKER not in repr(writer.call_args)
+    assert len(writer.call_args.args) == 5
+
+
+def test_no_stored_chunk_contains_the_raw_jd(sb):
+    """Real synthesis on a JD run, then the real writer: the briefing's stored
+    content (and so every embedded chunk) carries restated requirements, not the JD."""
+    from agents.synthesis import SynthesisOutput, synthesis_node
+
+    generated = SynthesisOutput(
+        key_requirements=["4+ years of Go [JD]"],
+        resume_alignment=["Built Go services [JD] [Resume: Experience]"],
+        talking_points=["Go services [Resume: Experience]"],
+    )
+    state = {
+        "company": "Stripe",
+        "role": "Backend",
+        "job_description": JD_TEXT,
+        "company_research": {"summary": "Payments", "sources": ["https://s.example"]},
+        "retrieved_context": {
+            "resume_chunks": [
+                {"doc_type": "resume", "section": "Experience", "content": "Go"}
+            ]
+        },
+    }
+    with patch("agents.synthesis._generate", return_value=generated):
+        content = synthesis_node(state)["briefing_content"]
+
+    n = write_briefing_chunks("u-1", "b-1", "Stripe", "Backend", content)
+    assert n >= 1
+    assert JD_MARKER not in repr(content)
+    assert all(JD_MARKER not in r["content"] for r in sb.store)
+    assert JD_TEXT not in repr(sb.embed.call_args_list)

@@ -1,0 +1,190 @@
+{
+  "version": "v2-jd-spike",
+  "cases": [
+    {
+      "id": "stripe-backend-01",
+      "company": "Stripe",
+      "role": "Backend Engineer",
+      "interviewer": null,
+      "interviewer_kind": null,
+      "resume_text": "Summary\nBackend engineer with five years building payment and ledger services.\n\nExperience\nHalcyon Systems, Senior Backend Engineer (2022-2025): led a ledger service in Go and PostgreSQL handling reconciliation for card transactions; cut settlement mismatches by 60%; designed idempotent retry logic for webhooks.\nBrightwater Analytics, Backend Engineer (2020-2022): built REST APIs in Python and Django; added rate limiting and an audit log.\n\nEducation\nB.S. Computer Science, Westbrook State University, 2020\n\nSkills\nGo, Python, PostgreSQL, Kafka, Redis, AWS, REST API design\n\nProjects\nOpen-source idempotency-key library for Go HTTP clients.\n",
+      "prior_briefings": [],
+      "reference": [
+        "Led a Go and PostgreSQL ledger service handling card transaction reconciliation at Halcyon Systems",
+        "Reduced settlement mismatches by 60%",
+        "Designed idempotent webhook retry logic",
+        "Built REST APIs in Python with rate limiting at Brightwater Analytics"
+      ],
+      "tags": [
+        "no-interviewer",
+        "payments"
+      ],
+      "job_description": "Backend Engineer, Payments Platform\n\nAbout the role\nYou will build and operate backend services that move and record money for online businesses. The team owns payment processing, ledgers and the webhooks that notify customers of events.\n\nWhat you will do\n- Design and build highly reliable backend services in Go or Java\n- Own the correctness of financial data, including reconciliation of transactions across systems\n- Design idempotent, retry-safe APIs and webhook delivery\n- Improve latency and availability of services that handle high request volume\n- Work with product and support teams to debug production issues\n\nRequirements\n- 4+ years of experience building backend services\n- Strong knowledge of relational databases such as PostgreSQL\n- Experience designing REST APIs\n- Experience with event streaming or message queues\n- Comfort being on call for the services you own\n\nNice to have\n- Experience with card payments or ledger systems\n- Experience with Ruby\n- Experience with formal API versioning practices"
+    },
+    {
+      "id": "shopify-fullstack-01",
+      "company": "Shopify",
+      "role": "Senior Full-Stack Engineer",
+      "interviewer": null,
+      "interviewer_kind": null,
+      "resume_text": "Summary\nFull-stack engineer focused on e-commerce storefronts and merchant tooling.\n\nExperience\nTallgrass Software, Senior Software Engineer (2021-2025): built a merchant dashboard in React and TypeScript backed by a Ruby on Rails API; improved checkout page load time by 35%.\nLumen Harbor, Software Engineer (2018-2021): maintained a Rails monolith and GraphQL gateway for an online marketplace.\n\nEducation\nB.A. Information Systems, Westbrook State University, 2018\n\nSkills\nRuby on Rails, React, TypeScript, GraphQL, MySQL, Redis\n\nProjects\nSide project: a theme builder for small online shops.\n",
+      "prior_briefings": [
+        {
+          "company": "Shopify",
+          "role": "Full-Stack Engineer",
+          "section": "talking_points",
+          "content": "Talking points: Highlight Rails and React experience; ask about the merchant tooling roadmap."
+        },
+        {
+          "company": "Shopify",
+          "role": "Full-Stack Engineer",
+          "section": "role_insights",
+          "content": "Key requirements: Ruby on Rails, GraphQL, performance work on storefronts."
+        }
+      ],
+      "reference": [
+        "Built a React and TypeScript merchant dashboard on a Ruby on Rails API at Tallgrass Software",
+        "Improved checkout page load time by 35%",
+        "Maintained a Rails monolith and GraphQL gateway at Lumen Harbor"
+      ],
+      "tags": [
+        "no-interviewer",
+        "prior-briefing"
+      ]
+    },
+    {
+      "id": "datadog-sre-01",
+      "company": "Datadog",
+      "role": "Site Reliability Engineer",
+      "interviewer": null,
+      "interviewer_kind": null,
+      "resume_text": "Summary\nSite reliability engineer experienced in observability and incident response.\n\nExperience\nIronbridge Data, Site Reliability Engineer (2021-2025): ran Kubernetes clusters on AWS for 40 services; built Prometheus and Grafana dashboards and SLO alerts; reduced mean time to recovery from 50 to 20 minutes.\nBrightwater Analytics, Systems Administrator (2018-2021): automated server provisioning with Terraform and Ansible.\n\nEducation\nB.S. Computer Engineering, Westbrook State University, 2018\n\nSkills\nKubernetes, AWS, Terraform, Prometheus, Grafana, Go, Python, on-call incident response\n",
+      "prior_briefings": [
+        {
+          "company": "Datadog",
+          "role": "SRE",
+          "section": "company_overview",
+          "content": "Datadog sells cloud monitoring and observability software."
+        }
+      ],
+      "reference": [
+        "Ran Kubernetes clusters on AWS for 40 services at Ironbridge Data",
+        "Built Prometheus and Grafana dashboards and SLO alerts",
+        "Reduced mean time to recovery from 50 to 20 minutes",
+        "Automated provisioning with Terraform and Ansible"
+      ],
+      "tags": [
+        "no-interviewer",
+        "observability"
+      ],
+      "job_description": "Site Reliability Engineer, Platform Infrastructure\n\nAbout the role\nYou will help keep a large, multi-region cloud platform reliable. The team builds the tooling and practices that let product engineers run their own services safely.\n\nWhat you will do\n- Operate and scale container orchestration clusters across multiple cloud regions\n- Define, measure and alert on service level objectives\n- Lead incident response and write blameless postmortems\n- Automate infrastructure provisioning and reduce operational toil\n- Improve monitoring, tracing and logging coverage for internal services\n\nRequirements\n- 3+ years of experience in site reliability or infrastructure engineering\n- Hands-on experience running Kubernetes in production\n- Experience with infrastructure as code tools such as Terraform\n- Proficiency in at least one of Go, Python or Rust\n- Participation in an on-call rotation\n\nNice to have\n- Experience with large-scale time series data\n- Experience with service mesh or eBPF tooling\n- Experience mentoring engineers on reliability practices"
+    },
+    {
+      "id": "mercury-ambiguous-01",
+      "company": "Mercury",
+      "role": "Software Engineer",
+      "interviewer": null,
+      "interviewer_kind": null,
+      "resume_text": "Summary\nSoftware engineer with a fintech background in banking APIs.\n\nExperience\nHalcyon Systems, Software Engineer (2020-2025): built account-opening and ACH transfer APIs in TypeScript and Node.js; integrated third-party KYC providers.\n\nEducation\nB.S. Computer Science, Westbrook State University, 2020\n\nSkills\nTypeScript, Node.js, PostgreSQL, React, AWS\n",
+      "prior_briefings": [],
+      "reference": [
+        "Built account-opening and ACH transfer APIs in TypeScript and Node.js",
+        "Integrated third-party KYC providers",
+        "Fintech and banking API background"
+      ],
+      "tags": [
+        "no-interviewer",
+        "ambiguous-company"
+      ],
+      "job_description": "Software Engineer, Business Banking Products\n\nAbout the role\nYou will build customer-facing and internal software for a business banking product used by startups and small companies. The team ships features end to end, from database to user interface.\n\nWhat you will do\n- Build and maintain APIs for accounts, transfers and payments\n- Integrate with banking partners and third-party compliance vendors\n- Build user interfaces in React and TypeScript\n- Write tests and monitor the features you ship\n- Collaborate with design, risk and operations teams\n\nRequirements\n- 3+ years of professional software engineering experience\n- Strong TypeScript and Node.js skills\n- Experience with SQL databases\n- Experience building or consuming financial or banking APIs\n- Care for security and correctness in systems that handle money\n\nNice to have\n- Experience with ACH or wire transfer systems\n- Experience with identity verification (KYC) integrations\n- Experience at an early-stage company"
+    },
+    {
+      "id": "nvidia-ml-public-01",
+      "company": "NVIDIA",
+      "role": "Machine Learning Engineer",
+      "interviewer": "Jensen Huang",
+      "interviewer_kind": "public_figure",
+      "resume_text": "Summary\nMachine learning engineer specialized in GPU-accelerated training and inference.\n\nExperience\nLumen Harbor, ML Engineer (2021-2025): optimized PyTorch training pipelines with mixed precision and CUDA kernels, achieving 2.1x faster training; deployed inference services with Triton.\nTallgrass Software, Data Scientist (2019-2021): built recommendation models in Python.\n\nEducation\nM.S. Computer Science, Westbrook State University, 2019\n\nSkills\nPython, PyTorch, CUDA, C++, Triton Inference Server, Docker\n",
+      "prior_briefings": [],
+      "reference": [
+        "Optimized PyTorch training pipelines with mixed precision and CUDA kernels for 2.1x faster training",
+        "Deployed inference services with Triton",
+        "Built recommendation models in Python"
+      ],
+      "tags": [
+        "public-figure-interviewer",
+        "gpu"
+      ]
+    },
+    {
+      "id": "microsoft-pm-public-01",
+      "company": "Microsoft",
+      "role": "Product Manager",
+      "interviewer": "Satya Nadella",
+      "interviewer_kind": "public_figure",
+      "resume_text": "Summary\nProduct manager for developer tools and enterprise collaboration software.\n\nExperience\nIronbridge Data, Senior Product Manager (2020-2025): owned a developer API platform used by 800 customers; shipped usage-based pricing; ran quarterly roadmap planning with engineering leads.\nHalcyon Systems, Associate Product Manager (2017-2020): launched an in-app collaboration feature that lifted weekly active users by 18%.\n\nEducation\nMBA, Westbrook State University, 2017\n\nSkills\nRoadmapping, A/B testing, SQL, stakeholder management, pricing strategy\n",
+      "prior_briefings": [],
+      "reference": [
+        "Owned a developer API platform used by 800 customers at Ironbridge Data",
+        "Shipped usage-based pricing",
+        "Launched a collaboration feature that lifted weekly active users by 18%"
+      ],
+      "tags": [
+        "public-figure-interviewer",
+        "product"
+      ]
+    },
+    {
+      "id": "cloudflare-fictional-01",
+      "company": "Cloudflare",
+      "role": "Systems Engineer",
+      "interviewer": "Odalys Venkataraghavan",
+      "interviewer_kind": "fictional",
+      "resume_text": "Summary\nSystems engineer with network programming and performance tuning experience.\n\nExperience\nTallgrass Software, Systems Engineer (2020-2025): wrote a Rust TCP proxy handling 50k requests per second; tuned Linux kernel network settings; built an eBPF-based latency tracer.\nLumen Harbor, Software Engineer (2018-2020): developed a DNS caching service in C.\n\nEducation\nB.S. Computer Science, Westbrook State University, 2018\n\nSkills\nRust, C, Linux networking, eBPF, TCP/IP, DNS, Go\n",
+      "prior_briefings": [],
+      "reference": [
+        "Wrote a Rust TCP proxy handling 50k requests per second",
+        "Built an eBPF-based latency tracer",
+        "Developed a DNS caching service in C"
+      ],
+      "tags": [
+        "fictional-interviewer",
+        "networking"
+      ]
+    },
+    {
+      "id": "airbnb-data-fictional-01",
+      "company": "Airbnb",
+      "role": "Data Engineer",
+      "interviewer": "Tobias Wrenfield",
+      "interviewer_kind": "fictional",
+      "resume_text": "Summary\nData engineer building batch and streaming pipelines for marketplace analytics.\n\nExperience\nBrightwater Analytics, Data Engineer (2020-2025): built Spark and Airflow pipelines processing 2 TB daily; created a streaming booking-events pipeline on Kafka; introduced data quality checks that caught schema drift.\nHalcyon Systems, Analyst (2018-2020): wrote SQL reports for finance.\n\nEducation\nB.S. Statistics, Westbrook State University, 2018\n\nSkills\nSpark, Airflow, Kafka, SQL, Python, dbt, Snowflake\n",
+      "prior_briefings": [],
+      "reference": [
+        "Built Spark and Airflow pipelines processing 2 TB daily",
+        "Created a streaming booking-events pipeline on Kafka",
+        "Introduced data quality checks that caught schema drift"
+      ],
+      "tags": [
+        "fictional-interviewer",
+        "data"
+      ]
+    },
+    {
+      "id": "notion-noresume-01",
+      "company": "Notion",
+      "role": "Product Designer",
+      "interviewer": null,
+      "interviewer_kind": null,
+      "resume_text": null,
+      "prior_briefings": [],
+      "reference": [
+        "No resume provided: the briefing should warn about this and not claim anything about the candidate's background"
+      ],
+      "tags": [
+        "no-interviewer",
+        "no-resume"
+      ]
+    }
+  ]
+}

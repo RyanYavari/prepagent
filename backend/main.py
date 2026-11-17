@@ -5,8 +5,11 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 load_dotenv()
 
@@ -50,22 +53,31 @@ configure_logging()
 def _startup_sweep() -> None:
     """Fail briefings orphaned on `running` by a previous process. Never raises."""
     try:
-        from services.briefings import sweep_stale_running
+        from services.briefings import sweep_stale_pending, sweep_stale_running
         from services.supabase_client import get_service_client
 
-        sweep_stale_running(get_service_client())
+        client = get_service_client()
+        sweep_stale_running(client)
+        sweep_stale_pending(client)
     except Exception:
         logging.getLogger(__name__).exception("Startup stale briefing sweep failed")
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Sweep stale runs, then start the optional calendar poller (off unless set)."""
+    """Validate production config, sweep stale runs, start the optional poller."""
+    from services.prod_config import enforce_production_config, worker_count_warning
+
+    enforce_production_config()
+    warning = worker_count_warning()
+    if warning:
+        logging.getLogger(__name__).warning(warning)
     await asyncio.to_thread(_startup_sweep)
     from routers.calendar import _get_supabase
     from services.calendar_poller import poll_interval_minutes, run_poller
+    from services.limits import calendar_enabled
 
-    interval = poll_interval_minutes()
+    interval = poll_interval_minutes() if calendar_enabled() else 0
     task = (
         asyncio.create_task(run_poller(_get_supabase, interval)) if interval else None
     )
@@ -78,15 +90,53 @@ async def lifespan(_app: FastAPI):
                 await task
 
 
-app = FastAPI(title="PrepAgent API", version="0.1.0", lifespan=lifespan)
+from services.prod_config import docs_kwargs
+
+app = FastAPI(
+    title="PrepAgent API", version="0.1.0", lifespan=lifespan, **docs_kwargs()
+)
+
+# Added before CORS so CORS is the outer layer: a 429 from the limiter must still
+# carry CORS headers, or the browser reports a CORS failure instead of "slow down".
+from services.rate_limit import RateLimitMiddleware
+
+app.add_middleware(RateLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3000")],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Auth is a Bearer header, not a cookie, so credentials are not needed.
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+    # The browser can only read Retry-After on a cross-origin 429 if it is exposed.
+    expose_headers=["Retry-After"],
 )
+
+# FastAPI's default 422 body includes `input`. For a 12k-character pasted job
+# description that would reflect it (and any recruiter details in it) back in the
+# response. Two cases leak it: errors on the field itself, and errors whose `input`
+# is the whole request body (a "missing company" error carries the entire body, and
+# so does a non-object body). Both are stripped; errors on a scalar field such as an
+# unsafe `company` still report the value the user typed.
+_NO_ECHO_FIELDS = {"job_description"}
+
+
+def _echoes_body(error: dict) -> bool:
+    loc = error.get("loc") or ()
+    if loc and loc[-1] in _NO_ECHO_FIELDS:
+        return True
+    return tuple(loc) == ("body",) or isinstance(error.get("input"), (dict, list))
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_handler(_request: Request, exc: RequestValidationError):
+    errors = [
+        {k: v for k, v in e.items() if k != "input"} if _echoes_body(e) else e
+        for e in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
+
 
 from routers.auth import router as auth_router
 from routers.calendar import router as calendar_router

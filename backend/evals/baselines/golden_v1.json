@@ -1,0 +1,374 @@
+{
+  "meta": {
+    "dataset_version": "v1",
+    "dataset_sha256": "01e47019627708f3da077c6f935cbec8408d6fac86c3e459358cf07c66c2b444",
+    "config": {
+      "agent_model": "claude-sonnet-5-5",
+      "judge_model": "claude-opus-5-5",
+      "embedding_model": "text-embedding-3-small",
+      "self_grading": false,
+      "ragas_version": "0.4.3",
+      "prompt_hashes": {
+        "company": "1b541070a6cf",
+        "interviewer": "250c3b7e53c8",
+        "synthesis": "228b958d479e"
+      },
+      "retrieval_mode": "in_memory",
+      "web_cache": "record",
+      "metric_version": 1
+    },
+    "git": {
+      "sha": "0a3e880",
+      "dirty": false
+    },
+    "note": "LABEL: scored by claude-opus-5-5 under metric_version 1 (synthesis faithfulness = all synthesis fields as written). Runs judged by another model (the default judge is now claude-sonnet-5-5) or under metric v2 are NOT comparable to these numbers. Scores only (no contexts or answers). Merged from run 20261116T031056Z (8 cases) and 20261116T033650Z (notion-noresume-01, rerun after the first attempt hit an Anthropic credit error; web results replayed from cache).",
+    "source_runs": [
+      "20261116T031056Z",
+      "20261116T033650Z"
+    ],
+    "cases_run": 9,
+    "judge_model": "claude-opus-5-5",
+    "baseline_label": "opus-judge-metric-v1"
+  },
+  "cases": [
+    {
+      "id": "stripe-backend-01",
+      "tags": [
+        "no-interviewer",
+        "payments"
+      ],
+      "interviewer_kind": null,
+      "scores": {
+        "faithfulness_company": 1.0,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": 0.6098,
+        "answer_relevancy": 0.7945,
+        "context_precision": 0.5,
+        "context_recall": 1.0,
+        "faithfulness": 0.8049
+      },
+      "score_errors": {},
+      "diagnostics": {
+        "prior_briefing_chunk_count": 0,
+        "faithfulness_synthesis_with_prior": null,
+        "prior_faithfulness_delta": null
+      },
+      "thresholds_met": {
+        "faithfulness_company": true,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": false,
+        "answer_relevancy": false,
+        "context_precision": false,
+        "context_recall": true,
+        "faithfulness": false
+      }
+    },
+    {
+      "id": "shopify-fullstack-01",
+      "tags": [
+        "no-interviewer",
+        "prior-briefing"
+      ],
+      "interviewer_kind": null,
+      "scores": {
+        "faithfulness_company": 1.0,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": 0.8182,
+        "answer_relevancy": 0.8224,
+        "context_precision": 0.5,
+        "context_recall": 1.0,
+        "faithfulness": 0.9091
+      },
+      "score_errors": {},
+      "diagnostics": {
+        "prior_briefing_chunk_count": 2,
+        "faithfulness_synthesis_with_prior": 0.7407,
+        "prior_faithfulness_delta": -0.0775
+      },
+      "thresholds_met": {
+        "faithfulness_company": true,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": false,
+        "answer_relevancy": true,
+        "context_precision": false,
+        "context_recall": true,
+        "faithfulness": true
+      }
+    },
+    {
+      "id": "datadog-sre-01",
+      "tags": [
+        "no-interviewer",
+        "observability"
+      ],
+      "interviewer_kind": null,
+      "scores": {
+        "faithfulness_company": 1.0,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": 0.5435,
+        "answer_relevancy": 0.7554,
+        "context_precision": 0.5,
+        "context_recall": 1.0,
+        "faithfulness": 0.7717
+      },
+      "score_errors": {},
+      "diagnostics": {
+        "prior_briefing_chunk_count": 1,
+        "faithfulness_synthesis_with_prior": 0.5952,
+        "prior_faithfulness_delta": 0.0517
+      },
+      "thresholds_met": {
+        "faithfulness_company": true,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": false,
+        "answer_relevancy": false,
+        "context_precision": false,
+        "context_recall": true,
+        "faithfulness": false
+      }
+    },
+    {
+      "id": "mercury-ambiguous-01",
+      "tags": [
+        "no-interviewer",
+        "ambiguous-company"
+      ],
+      "interviewer_kind": null,
+      "scores": {
+        "faithfulness_company": 0.8333,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": 0.7059,
+        "answer_relevancy": 0.8187,
+        "context_precision": 0.9167,
+        "context_recall": 1.0,
+        "faithfulness": 0.7696
+      },
+      "score_errors": {},
+      "diagnostics": {
+        "prior_briefing_chunk_count": 0,
+        "faithfulness_synthesis_with_prior": null,
+        "prior_faithfulness_delta": null
+      },
+      "thresholds_met": {
+        "faithfulness_company": false,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": false,
+        "answer_relevancy": true,
+        "context_precision": true,
+        "context_recall": true,
+        "faithfulness": false
+      }
+    },
+    {
+      "id": "nvidia-ml-public-01",
+      "tags": [
+        "public-figure-interviewer",
+        "gpu"
+      ],
+      "interviewer_kind": "public_figure",
+      "scores": {
+        "faithfulness_company": 1.0,
+        "faithfulness_interviewer": 0.8261,
+        "faithfulness_synthesis": 0.5873,
+        "answer_relevancy": 0.7533,
+        "context_precision": 0.9167,
+        "context_recall": 1.0,
+        "faithfulness": 0.8045
+      },
+      "score_errors": {},
+      "diagnostics": {
+        "prior_briefing_chunk_count": 0,
+        "faithfulness_synthesis_with_prior": null,
+        "prior_faithfulness_delta": null
+      },
+      "thresholds_met": {
+        "faithfulness_company": true,
+        "faithfulness_interviewer": false,
+        "faithfulness_synthesis": false,
+        "answer_relevancy": false,
+        "context_precision": true,
+        "context_recall": true,
+        "faithfulness": false
+      }
+    },
+    {
+      "id": "microsoft-pm-public-01",
+      "tags": [
+        "public-figure-interviewer",
+        "product"
+      ],
+      "interviewer_kind": "public_figure",
+      "scores": {
+        "faithfulness_company": 0.871,
+        "faithfulness_interviewer": 1.0,
+        "faithfulness_synthesis": 0.561,
+        "answer_relevancy": 0.8654,
+        "context_precision": 1.0,
+        "context_recall": 1.0,
+        "faithfulness": 0.8107
+      },
+      "score_errors": {},
+      "diagnostics": {
+        "prior_briefing_chunk_count": 0,
+        "faithfulness_synthesis_with_prior": null,
+        "prior_faithfulness_delta": null
+      },
+      "thresholds_met": {
+        "faithfulness_company": true,
+        "faithfulness_interviewer": true,
+        "faithfulness_synthesis": false,
+        "answer_relevancy": true,
+        "context_precision": true,
+        "context_recall": true,
+        "faithfulness": false
+      }
+    },
+    {
+      "id": "cloudflare-fictional-01",
+      "tags": [
+        "fictional-interviewer",
+        "networking"
+      ],
+      "interviewer_kind": "fictional",
+      "scores": {
+        "faithfulness_company": 1.0,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": 0.5385,
+        "answer_relevancy": 0.7379,
+        "context_precision": 0.5,
+        "context_recall": 1.0,
+        "faithfulness": 0.7692
+      },
+      "score_errors": {},
+      "diagnostics": {
+        "prior_briefing_chunk_count": 0,
+        "faithfulness_synthesis_with_prior": null,
+        "prior_faithfulness_delta": null
+      },
+      "thresholds_met": {
+        "faithfulness_company": true,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": false,
+        "answer_relevancy": false,
+        "context_precision": false,
+        "context_recall": true,
+        "faithfulness": false
+      }
+    },
+    {
+      "id": "airbnb-data-fictional-01",
+      "tags": [
+        "fictional-interviewer",
+        "data"
+      ],
+      "interviewer_kind": "fictional",
+      "scores": {
+        "faithfulness_company": 1.0,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": 0.4483,
+        "answer_relevancy": 0.742,
+        "context_precision": 0.9167,
+        "context_recall": 1.0,
+        "faithfulness": 0.7241
+      },
+      "score_errors": {},
+      "diagnostics": {
+        "prior_briefing_chunk_count": 0,
+        "faithfulness_synthesis_with_prior": null,
+        "prior_faithfulness_delta": null
+      },
+      "thresholds_met": {
+        "faithfulness_company": true,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": false,
+        "answer_relevancy": false,
+        "context_precision": true,
+        "context_recall": true,
+        "faithfulness": false
+      }
+    },
+    {
+      "id": "notion-noresume-01",
+      "tags": [
+        "no-interviewer",
+        "no-resume"
+      ],
+      "interviewer_kind": null,
+      "scores": {
+        "faithfulness_company": 1.0,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": 0.9333,
+        "answer_relevancy": 0.809,
+        "context_precision": null,
+        "context_recall": null,
+        "faithfulness": 0.9667
+      },
+      "score_errors": {},
+      "diagnostics": {
+        "prior_briefing_chunk_count": 0,
+        "faithfulness_synthesis_with_prior": null,
+        "prior_faithfulness_delta": null
+      },
+      "thresholds_met": {
+        "faithfulness_company": true,
+        "faithfulness_interviewer": null,
+        "faithfulness_synthesis": true,
+        "answer_relevancy": true,
+        "context_precision": null,
+        "context_recall": null,
+        "faithfulness": true
+      }
+    }
+  ],
+  "summary": {
+    "faithfulness_company": {
+      "mean": 0.9671,
+      "min": 0.8333,
+      "n": 9,
+      "threshold": 0.85,
+      "below_threshold_count": 1
+    },
+    "faithfulness_interviewer": {
+      "mean": 0.913,
+      "min": 0.8261,
+      "n": 2,
+      "threshold": 0.85,
+      "below_threshold_count": 1
+    },
+    "faithfulness_synthesis": {
+      "mean": 0.6384,
+      "min": 0.4483,
+      "n": 9,
+      "threshold": 0.85,
+      "below_threshold_count": 8
+    },
+    "answer_relevancy": {
+      "mean": 0.7887,
+      "min": 0.7379,
+      "n": 9,
+      "threshold": 0.8,
+      "below_threshold_count": 5
+    },
+    "context_precision": {
+      "mean": 0.7188,
+      "min": 0.5,
+      "n": 8,
+      "threshold": 0.7,
+      "below_threshold_count": 4
+    },
+    "context_recall": {
+      "mean": 1.0,
+      "min": 1.0,
+      "n": 8,
+      "threshold": 0.75,
+      "below_threshold_count": 0
+    },
+    "faithfulness": {
+      "mean": 0.8145,
+      "min": 0.7241,
+      "n": 9,
+      "threshold": 0.85,
+      "below_threshold_count": 7
+    }
+  }
+}

@@ -119,3 +119,129 @@ Sign-in uses Google only for identity: tokens stay in memory for the userinfo ca
 
 **Revisit when:**
 Sign-in itself needs offline access to a Google API.
+
+---
+
+## 2026-11-15 RAGAS eval harness: observe the real graph, exclude prior briefings from scored contexts
+
+**Status:** Accepted
+
+**Context:**
+ADR section 5 promised RAGAS scoring but nothing existed. The graph keeps only summaries and source URLs (not the raw web results), and retrieval returns every resume chunk plus same-company prior briefings, which synthesis may not cite.
+
+**Decision:**
+`backend/evals/` runs `build_graph()` directly over a synthetic golden set with harness-only seams (in-memory retrieval, recorded web results with optional record/replay cache, counted LLM calls). Scoring uses ragas 0.4.3 collections metrics through a custom judge on ChatAnthropic, with a hard LLM-call cap. Prior-briefing chunks are never a scored context; they feed a with-prior faithfulness diagnostic. Judge model is `JUDGE_MODEL` (default differs from the agent model; equal models are flagged as self-grading). Thresholds are reported, not enforced; evals never run in CI or pytest.
+
+**Alternatives considered:**
+- Count prior briefings as context: Rejected because an earlier hallucination would then validate a later claim.
+- Call `run_pipeline`: Rejected because it persists to Supabase and writes chunks.
+- Legacy `ragas.evaluate()`/`Dataset`: Rejected because 0.4.3 collections metrics are the maintained path and let every judge call be counted against the cap.
+- Same model as judge: Rejected as the default because of self-preference bias.
+
+**Tradeoffs:**
+- Pro: no production code changed, no user data touched, before/after runs comparable with cached web results
+- Con: context recall is about 1.0 by construction (retrieval returns all chunks) and precision mostly reflects the resume; the judge costs about 15 calls per case
+
+**Revisit when:**
+Retrieval becomes selective (top-k or reranked), or a prior-briefing citation format is introduced.
+
+---
+
+## 2026-11-15 Split synthesis faithfulness into factual and prescriptive (metric v2)
+
+**Status:** Accepted
+
+**Context:**
+Synthesis faithfulness scored 0.64, but about 100 of 122 flagged claims were advice wording ("a talking point is to...", story templates) that no context can contain, plus a handful of genuine stretched inferences and about two overgeneralised facts. The number could not tell a hallucination from a prescriptive sentence.
+
+**Decision:**
+The main synthesis score covers factual fields only (role insights, shared interests). Talking points, stories and conversation starters are scored by first extracting the facts they rely on with a judge call, then checking those facts. The old all-fields score stays as `faithfulness_synthesis_all`, and results record `metric_version: 2`.
+
+**Alternatives considered:**
+- Change the synthesis prompt first: Rejected because the change would be measured against a score that is mostly artifact.
+- Drop prescriptive fields from scoring entirely: Rejected because their cited facts are where ADR section 6's stretched-connection failure shows up.
+- Rewrite items with regexes instead of a judge call: Rejected because advice and fact are interleaved in free text.
+
+**Tradeoffs:**
+- Pro: the headline metric now moves when facts get less supported, not when phrasing changes
+- Con: about 5 extra judge calls per case; the extraction step can itself drop claims, so the prescriptive score is more lenient; v1 and v2 baselines are comparable only through `faithfulness_synthesis_all`
+
+**Revisit when:**
+Synthesis output gains structured citations per item (then check the citation directly instead of extracting facts).
+
+---
+
+## 2026-11-15 Eval cost controls: opt-in recall, briefing cache, Sonnet judge
+
+**Status:** Accepted
+
+**Context:**
+A full eval run cost about 200 LLM calls with an Opus judge, repeated in full on every scoring change because each run re-ran the pipeline, and it paid for context recall (about 1.0 by construction).
+
+**Decision:**
+Metrics are selectable and context recall is opt-in. Generated briefings are cached so `--rescore` calls only the judge. A preflight prints per-model call estimates and refuses to start above `--max-llm-calls` (no override flag). The judge default moves to `claude-sonnet-5-5`; the Opus-scored `golden_v1.json` baseline stays but is labelled, and `compare` warns that scores from different judges are not comparable.
+
+**Alternatives considered:**
+- Keep Opus as the judge and cut cases: Rejected because the case count was already small and judge cost scales with every re-score.
+- Haiku as the default judge: Rejected as a default because NLI verdict quality on long contexts is unproven; it remains one env var away.
+- Re-run the pipeline for every re-score: Rejected because it pays for generation to change only the grader.
+- Keep a `--force` to bypass the cap: Rejected because the point of the cap is a refusal.
+
+**Tradeoffs:**
+- Pro: a rescore of 4 cases is about 40-65 calls instead of about 100; metric choice controls cost directly
+- Con: the default judge equals the default agent model (self-grading, optimistic scores); older baselines are not comparable to new runs; cached briefings can lag the prompts unless the pipeline is re-run
+
+**Revisit when:**
+A cheaper non-self-grading judge (or batch pricing for the judge) is validated against the Opus-scored baseline.
+
+---
+
+## 2026-11-15 Synthesis prompt: hedge inferences, frame requirements as inferred, no trend generalisation
+
+**Status:** Accepted (not yet measured: no live eval was run for this change)
+
+**Context:**
+The claim-level audit of the eval baseline found the real faithfulness problems were few but specific: role requirements stated as fact with no job description to support them, resume-to-company connections presented as established, gaps inferred from what a resume omits, and one cited event stretched into a trend (a single acquisition described as acquisitions in a whole area).
+
+**Decision:**
+One addition to `SYSTEM_PROMPT` in `agents/synthesis.py` (nothing else changed): (1) anything inferred rather than stated in the context (a requirement, a candidate-to-company connection, a gap) is phrased as a hedged inference ("likely", "based on the company's focus on X") and tied to the specific company or resume fact it rests on, cited as before; (2) because no job description is provided, role requirements are framed as inferred from the company research, never as stated requirements; (3) never generalise a single cited event into a trend or pattern. Prior briefings stay background only and not citable, and the citation tags and the drop-if-uncitable rule are unchanged.
+
+**Prompt hash (eval `prompt_hashes.synthesis`, sha256 prefix of `SYSTEM_PROMPT`):** `228b958d479e` before, `f7be121b67df` after. The company and interviewer hashes are unchanged (`1b541070a6cf`, `250c3b7e53c8`). Every existing eval result and baseline, including `golden_v1.json`, was generated under the old synthesis hash.
+
+**Alternatives considered:**
+- Drop unsupported requirements entirely: Rejected because inferred requirements are useful to a candidate; hedging keeps them honest.
+- Enforce hedging in code (post-validation): Rejected for now because there is no reliable way to detect an unhedged inference without another LLM call.
+- Change scoring instead of the prompt: Already done (metric v2); this targets the residual real claims.
+
+**Tradeoffs:**
+- Pro: inferred items become visibly inferred, so a wrong inference reads as a guess, not a fact
+- Con: more hedged wording may read as less confident; items without a citable fact may now be dropped more often; the effect is unmeasured until a live eval (`--rescore` cannot test it because it reuses briefings made with the old prompt, so a normal run is needed)
+
+**Revisit when:**
+A Sonnet-judged metric-v2 run on the new prompt shows whether synthesis faithfulness, answer relevancy and the dropped-citation counts moved; revert if relevancy or usefulness drops without a faithfulness gain.
+
+---
+
+## 2026-11-15 Optional job description: request-scoped, bare `[JD]` tag, shared untrusted rule left unchanged
+
+**Status:** Accepted (eval spike measured on 3 clean synthetic cases, self-graded; the form, API and viewer path not yet browser-verified)
+
+**Context:**
+Synthesis had to infer role requirements from company research because no job description was available, and the claim-level audit showed this was a main source of unsupported claims. A user who has the posting could not supply it.
+
+**Decision:**
+(1) An optional pasted job description (max 12,000 characters, rejected not truncated) is passed to synthesis only, as an `untrusted_data` block, and requirements, alignment and gaps must cite it with a bare `[JD]` tag. Code enforces it: `[JD]` is valid only when a JD was supplied and, with a JD, a `key_requirements` item without it is dropped. (2) It is request-scoped: not stored, logged, put in run metadata or embedded; the 422 for an oversize JD does not echo it. (3) `UNTRUSTED_RULE` is not changed; the JD-present prompt sentence says the block is data. (4) Calendar-detected briefings never get a JD. (5) The viewer marks `[JD]` items with a chip and the Key requirements list with a "From job description" label.
+
+**Alternatives considered:**
+- Store the JD on `briefings` (migration 008): Rejected for now. Nothing here needs it after generation (no regenerate or display), and it would add a retention surface for pasted posting text and recruiter details. Revisit if regenerate or JD display becomes a goal.
+- Add the job description to `UNTRUSTED_RULE`: Rejected because that shared text feeds every agent, so it would change every prompt hash and break the byte-identical no-JD prompt that keeps older evals comparable.
+- Fetch a JD from a URL, or use the calendar event text: Rejected: a second untrusted-content path (SSRF, injection) for the most attacker-controllable text in the system.
+- `[JD: <quoted phrase>]` with code-side phrase checking: Deferred; stronger but brittle to paraphrase and more tokens. Revisit if requirements drift from the JD.
+- Reject URLs and markup like other short fields: Rejected because real postings contain links, "C++" and "<5ms"; safety comes from the prompt layer plus control-character stripping.
+
+**Tradeoffs:**
+- Pro: requirements are grounded in text the user supplied and visibly marked; on 3 synthetic cases factual synthesis faithfulness went from about 0.56 to about 0.99 with all 29 key requirements tagged and none dropped
+- Con: that gain is partly by construction (the JD is a scored context), the JDs were clean synthetic ones, and the judge was the generating model, so it is a best case; the pasted text is sent to LangSmith when tracing is on; JD-derived paraphrases are embedded as prior briefings; no regenerate-with-same-JD and `[JD]` citations cannot be audited against the source later
+
+**Revisit when:**
+Regenerate or JD display is wanted (store it), a real-posting eval or live smoke call shows requirements drifting from the JD (stronger tag), or a later briefing is visibly nudged by an earlier role's JD (filter prior briefings by role).

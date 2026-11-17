@@ -52,8 +52,9 @@ UNIQUE_KEYS = {
 
 
 class _Result:
-    def __init__(self, data):
+    def __init__(self, data, count=None):
         self.data = data
+        self.count = count
 
 
 class _Query:
@@ -75,6 +76,18 @@ class _Query:
         self.filters.append(("neq", col, val))
         return self
 
+    def lt(self, col, val):
+        self.filters.append(("lt", col, val))
+        return self
+
+    def gte(self, col, val):
+        self.filters.append(("gte", col, val))
+        return self
+
+    def in_(self, col, vals):
+        self.filters.append(("in", col, list(vals)))
+        return self
+
     def order(self, *a, **k):
         return self
 
@@ -88,6 +101,12 @@ class _Query:
                 return False
             if kind == "neq" and row.get(col) == val:
                 return False
+            if kind == "lt" and not (row.get(col) is not None and row[col] < val):
+                return False
+            if kind == "gte" and not (row.get(col) is not None and row[col] >= val):
+                return False
+            if kind == "in" and row.get(col) not in val:
+                return False
         return True
 
     def execute(self):
@@ -97,7 +116,8 @@ class _Query:
             if "range" in self.opts:
                 start, end = self.opts["range"]
                 hit = hit[start : end + 1]
-            return _Result(hit)
+            count = len(hit) if self.opts.get("count") else None
+            return _Result(hit, count)
         if self.op == "delete":
             gone = [r for r in rows if self._match(r)]
             self.db.tables[self.name] = [r for r in rows if r not in gone]
@@ -118,8 +138,11 @@ class _Query:
                         return _Result([dict(r)])
             row = dict(self.payload)
             row.setdefault("id", str(uuid.uuid4()))
-            row.setdefault("created_at", NOW.isoformat())
-            row.setdefault("updated_at", NOW.isoformat())
+            # The real clock, not the fixed NOW above: rows must stay inside rolling
+            # windows (the 24 h briefing caps) whatever day the tests run on.
+            stamp = datetime.now(UTC).isoformat()
+            row.setdefault("created_at", stamp)
+            row.setdefault("updated_at", stamp)
             rows.append(row)
             return _Result([dict(row)])
         raise AssertionError(self.op)
@@ -130,7 +153,7 @@ class _Table:
         self.db, self.name = db, name
 
     def select(self, *a, **k):
-        return _Query(self.db, self.name, "select")
+        return _Query(self.db, self.name, "select", count=k.get("count"))
 
     def insert(self, row):
         return _Query(self.db, self.name, "insert", row)

@@ -19,3 +19,7 @@ node_modules/
 
 grounding_docs/project_spec.md
 Architectural decisions cheat sheet.md
+
+# Eval harness output and web cache
+backend/evals/results/
+backend/evals/cache/

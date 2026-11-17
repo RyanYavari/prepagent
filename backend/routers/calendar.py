@@ -23,6 +23,7 @@ from models.calendar import (
     DetectionListResponse,
     SyncResponse,
 )
+from routers.limit_errors import briefing_blocked_http
 from services.briefings import create_pending_briefing
 from services.calendar import CalendarApiError
 from services.calendar_sync import (
@@ -39,12 +40,26 @@ from services.google_auth import (
     exchange_calendar_code,
     revoke_token,
 )
+from services.limits import BriefingBlockedError, calendar_enabled
+from services.log_safety import log_failure
 from services.supabase_client import create_client
 from services.token_crypto import TokenCryptoError, decrypt_token, encrypt_token
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/calendar", tags=["calendar"])
+
+def _require_calendar_enabled() -> None:
+    if not calendar_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Calendar is not available"
+        )
+
+
+router = APIRouter(
+    prefix="/calendar",
+    tags=["calendar"],
+    dependencies=[Depends(_require_calendar_enabled)],
+)
 
 
 def _get_supabase():
@@ -110,8 +125,8 @@ async def calendar_callback(
             },
             on_conflict="user_id",
         ).execute()
-    except Exception:
-        logger.exception("Failed to store calendar connection")
+    except Exception as exc:
+        log_failure(logger, "Failed to store calendar connection", exc)
         await revoke_token(tokens["refresh_token"])
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -121,7 +136,7 @@ async def calendar_callback(
 
 
 @router.get("/status", response_model=CalendarStatus)
-async def calendar_status(user: CurrentUser = Depends(get_current_user)):
+def calendar_status(user: CurrentUser = Depends(get_current_user)):
     try:
         result = (
             _get_supabase()
@@ -177,8 +192,8 @@ async def disconnect_calendar(user: CurrentUser = Depends(get_current_user)):
         supabase.table("calendar_detections").update({"classification": None}).eq(
             "user_id", user.user_id
         ).eq("status", "briefing_created").execute()
-    except Exception:
-        logger.exception("Failed to disconnect calendar")
+    except Exception as exc:
+        log_failure(logger, "Failed to disconnect calendar", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to disconnect calendar",
@@ -244,7 +259,7 @@ def _detection_item(row: dict) -> DetectionItem:
 
 
 @router.get("/detections", response_model=DetectionListResponse)
-async def list_detections(user: CurrentUser = Depends(get_current_user)):
+def list_detections(user: CurrentUser = Depends(get_current_user)):
     """Detected interviews waiting for the user's confirmation."""
     try:
         result = (
@@ -256,8 +271,8 @@ async def list_detections(user: CurrentUser = Depends(get_current_user)):
             .order("event_start")
             .execute()
         )
-    except Exception:
-        logger.exception("Failed to list detections")
+    except Exception as exc:
+        log_failure(logger, "Failed to list detections", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list detections",
@@ -277,7 +292,7 @@ def _parse_detection_id(detection_id: str) -> str:
 @router.post(
     "/detections/{detection_id}/confirm", response_model=DetectionConfirmResponse
 )
-async def confirm_detection(
+def confirm_detection(
     detection_id: str,
     background_tasks: BackgroundTasks,
     body: DetectionConfirmRequest | None = None,
@@ -323,8 +338,8 @@ async def confirm_detection(
         row = claimed.data[0]
     except HTTPException:
         raise
-    except Exception:
-        logger.exception("Failed to confirm detection")
+    except Exception as exc:
+        log_failure(logger, "Failed to confirm detection", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to confirm detection",
@@ -361,12 +376,19 @@ async def confirm_detection(
         supabase.table("calendar_detections").update(
             {"status": "briefing_created", "briefing_id": briefing["id"]}
         ).eq("id", detection_id).execute()
-    except Exception:
-        logger.exception("Failed to create briefing from detection")
+    except BriefingBlockedError as exc:
+        # Kill switch or cap: nothing is lost, the detection goes back to the list.
         try:
             _release()
-        except Exception:
-            logger.exception("Failed to release detection after error")
+        except Exception as release_exc:
+            log_failure(logger, "Failed to release detection after block", release_exc)
+        raise briefing_blocked_http(exc)
+    except Exception as exc:
+        log_failure(logger, "Failed to create briefing from detection", exc)
+        try:
+            _release()
+        except Exception as exc:
+            log_failure(logger, "Failed to release detection after error", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create briefing",
@@ -375,7 +397,7 @@ async def confirm_detection(
 
 
 @router.post("/detections/{detection_id}/dismiss", response_model=DetectionItem)
-async def dismiss_detection(
+def dismiss_detection(
     detection_id: str,
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -390,8 +412,8 @@ async def dismiss_detection(
             .eq("status", "needs_confirmation")
             .execute()
         )
-    except Exception:
-        logger.exception("Failed to dismiss detection")
+    except Exception as exc:
+        log_failure(logger, "Failed to dismiss detection", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to dismiss detection",

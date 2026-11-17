@@ -1,10 +1,12 @@
 export type Segment =
   | { type: "text"; text: string }
   | { type: "source"; url: string }
-  | { type: "resume"; section: string };
+  | { type: "resume"; section: string }
+  | { type: "jd" };
 
-// Mirrors _SOURCE_TAG / _RESUME_TAG in backend/agents/synthesis.py.
-const TAG = /\[(Source|Resume):\s*([^\]]+?)\s*\]/g;
+// Mirrors _SOURCE_TAG / _RESUME_TAG / _JD_TAG in backend/agents/synthesis.py.
+// `[JD]` is a bare, case-sensitive tag: the item came from the pasted job description.
+const TAG = /\[(?:(Source|Resume):\s*([^\]]+?)\s*|(JD))\]/g;
 const HTTP_URL = /^https?:\/\/\S+$/i;
 
 export function parseCitations(text: string): Segment[] {
@@ -21,8 +23,11 @@ export function parseCitations(text: string): Segment[] {
     const index = m.index ?? 0;
     pending += text.slice(last, index);
     last = index + m[0].length;
-    const [raw, kind, value] = m;
-    if (kind === "Resume") {
+    const [raw, kind, value, jd] = m;
+    if (jd) {
+      flush();
+      segments.push({ type: "jd" });
+    } else if (kind === "Resume") {
       flush();
       segments.push({ type: "resume", section: value });
     } else if (HTTP_URL.test(value)) {

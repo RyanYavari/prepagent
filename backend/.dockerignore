@@ -1,0 +1,21 @@
+# Nothing secret or dev-only may enter the image. backend/.env holds real credentials.
+.env
+.env.*
+**/.env
+**/.env.*
+venv/
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+main.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+tests/
+evals/
+requirements.txt
+requirements-dev.txt
+Dockerfile
+.dockerignore

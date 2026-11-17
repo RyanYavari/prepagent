@@ -1,13 +1,13 @@
-import os
 from dataclasses import dataclass
 
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from services.prod_config import get_jwt_secret
+
 _bearer_scheme = HTTPBearer()
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
 JWT_ALGORITHM = "HS256"
 
 
@@ -23,7 +23,7 @@ async def get_current_user(
     """Decode and validate the JWT from the Authorization header."""
     token = credentials.credentials
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

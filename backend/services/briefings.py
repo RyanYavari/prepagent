@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from models.briefing import BriefingCreate, BriefingStatus
+from services.limits import check_briefing_allowed, creation_lock
 from services.net_config import env_float
 from services.supabase_client import execute
 
@@ -22,15 +23,32 @@ def create_pending_briefing(
     user_id: str,
     fields: BriefingCreate,
     start_pipeline: Callable[..., Any],
+    check_limits: bool = True,
 ) -> dict:
     """Insert a pending briefing for `user_id` and start the pipeline.
 
     `start_pipeline(**kwargs)` is supplied by the caller (typically
     `partial(background_tasks.add_task, run_pipeline)`). resume_text is not
-    handled here; callers that accept it embed it first.
+    handled here; callers that accept it embed it first. `fields.job_description` is
+    request-scoped: it goes to the pipeline as an argument and is never inserted.
 
-    Raises whatever the insert raises; callers map that to a generic error.
+    Raises BriefingBlockedError when the kill switch or a cap blocks creation (callers
+    that already ran `check_briefing_allowed` pass `check_limits=False`), otherwise
+    whatever the insert raises; callers map that to a generic error.
     """
+    with creation_lock:
+        return _create_locked(supabase, user_id, fields, start_pipeline, check_limits)
+
+
+def _create_locked(
+    supabase: Any,
+    user_id: str,
+    fields: BriefingCreate,
+    start_pipeline: Callable[..., Any],
+    check_limits: bool,
+) -> dict:
+    if check_limits:
+        check_briefing_allowed(supabase, user_id)
     row = {
         "user_id": user_id,
         "company": fields.company,
@@ -48,6 +66,7 @@ def create_pending_briefing(
         company=briefing["company"],
         interviewer=briefing.get("interviewer"),
         role=briefing.get("role"),
+        job_description=fields.job_description,
     )
     return briefing
 
@@ -55,7 +74,9 @@ def create_pending_briefing(
 REASON_STALE = "This briefing was interrupted and did not finish. Please try again."
 
 
-def sweep_stale_running(supabase: Any, user_id: str | None = None) -> int:
+def _sweep_stale(
+    supabase: Any, user_id: str | None, from_status: BriefingStatus
+) -> int:
     """
     Mark briefings stuck on `running` for longer than STALE_RUNNING_MINUTES as failed.
 
@@ -73,7 +94,7 @@ def sweep_stale_running(supabase: Any, user_id: str | None = None) -> int:
         query = (
             supabase.table("briefings")
             .update(fields)
-            .eq("status", BriefingStatus.running.value)
+            .eq("status", from_status.value)
             .lt("created_at", cutoff.isoformat())
         )
         if user_id is not None:
@@ -88,5 +109,21 @@ def sweep_stale_running(supabase: Any, user_id: str | None = None) -> int:
 
     count = len(result.data or [])
     if count:
-        logger.warning("Marked %d stale running briefing(s) as failed", count)
+        logger.warning(
+            "Marked %d stale %s briefing(s) as failed", count, from_status.value
+        )
     return count
+
+
+def sweep_stale_running(supabase: Any, user_id: str | None = None) -> int:
+    """Fail `running` briefings older than STALE_RUNNING_MINUTES (see `_sweep_stale`)."""
+    return _sweep_stale(supabase, user_id, BriefingStatus.running)
+
+
+def sweep_stale_pending(supabase: Any, user_id: str | None = None) -> int:
+    """Fail `pending` briefings older than STALE_RUNNING_MINUTES.
+
+    A row stays `pending` only for the moment between insert and the pipeline
+    starting, so an old one was orphaned (a restart between the two).
+    """
+    return _sweep_stale(supabase, user_id, BriefingStatus.pending)
