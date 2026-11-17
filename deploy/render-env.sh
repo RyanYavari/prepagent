@@ -3,7 +3,8 @@
 #
 #   deploy/render-env.sh [ssm-path-prefix] [output-file]
 #
-# Defaults: /prepagent/prod/  ->  /etc/prepagent/backend.env (mode 0600, owner root).
+# Defaults: /prepagent/prod/  ->  /etc/prepagent/backend.env (mode 0600, owner root),
+# region us-east-2 (Ohio).
 # Each parameter /prepagent/prod/NAME becomes a NAME=value line. Needs the AWS CLI and
 # jq, and an instance role allowed to read that prefix. Values are never printed: only
 # the count and the names of any problem parameters.
@@ -11,20 +12,23 @@ set -euo pipefail
 
 PREFIX="${1:-/prepagent/prod/}"
 OUT="${2:-/etc/prepagent/backend.env}"
+# The SSM parameters live in one region. Set explicitly: the CLI on EC2 does not
+# necessarily infer it. Override with AWS_REGION for another region.
+REGION="${AWS_REGION:-us-east-2}"
 
 umask 077
 TMP="$(mktemp "${OUT}.XXXXXX")"
 trap 'rm -f "$TMP"' EXIT
 
 # Fetch and render in one pipeline so values live only in the pipe and the 0600 file.
-aws ssm get-parameters-by-path \
+aws ssm get-parameters-by-path --region "$REGION" \
   --path "$PREFIX" --recursive --with-decryption \
   --query 'Parameters[].{n:Name,v:Value}' --output json |
   jq -r '.[] | (.n | split("/") | last) as $k | "\($k)=\(.v)"' >"$TMP"
 
 # Values with a newline would corrupt an env file (and could smuggle extra variables).
 # Check the number of lines against the number of parameters; print names only.
-EXPECTED="$(aws ssm get-parameters-by-path --path "$PREFIX" --recursive \
+EXPECTED="$(aws ssm get-parameters-by-path --region "$REGION" --path "$PREFIX" --recursive \
   --query 'length(Parameters)' --output text)"
 ACTUAL="$(wc -l <"$TMP" | tr -d ' ')"
 if [ "$EXPECTED" != "$ACTUAL" ] || [ "$ACTUAL" -eq 0 ]; then
