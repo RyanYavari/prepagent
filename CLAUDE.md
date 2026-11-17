@@ -199,3 +199,6 @@ Company Intelligence + Interviewer Research run in parallel, then RAG Retrieval,
 - Sign-in stores no Google tokens; only the encrypted calendar refresh token is stored (`calendar_connections`)
 - pgvector chosen over Pinecone (corpus is too small for dedicated vector service)
 - Frontend auth state lives in localStorage (session JWT)
+
+## Status doc
+Before every commit, update docs/STATUS.md in the same commit: move finished items to Done, add new TODOs, record new measured numbers, update the date and commit hash. Never commit without it.
