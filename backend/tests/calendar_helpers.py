@@ -138,8 +138,11 @@ class _Query:
                         return _Result([dict(r)])
             row = dict(self.payload)
             row.setdefault("id", str(uuid.uuid4()))
-            row.setdefault("created_at", NOW.isoformat())
-            row.setdefault("updated_at", NOW.isoformat())
+            # The real clock, not the fixed NOW above: rows must stay inside rolling
+            # windows (the 24 h briefing caps) whatever day the tests run on.
+            stamp = datetime.now(UTC).isoformat()
+            row.setdefault("created_at", stamp)
+            row.setdefault("updated_at", stamp)
             rows.append(row)
             return _Result([dict(row)])
         raise AssertionError(self.op)
