@@ -1,24 +1,26 @@
 # PrepAgent
 
-AI-powered interview research. Enter a company and interviewer — get a personalized briefing in 90 seconds.
+AI-powered interview research. Enter a company and interviewer, and get a personalized, cited briefing from a multi-agent pipeline.
+
+**Live:** https://useprepagent.app · API health: https://api.useprepagent.app/health
 
 ## What it does
 
-PrepAgent runs a 4-agent research pipeline when you have an interview:
+PrepAgent runs a 4-node LangGraph research pipeline when you have an interview:
 
-1. **Company Intelligence Agent** — finds recent news, funding, engineering blog posts, and job posting patterns
-2. **Interviewer Research Agent** — builds a profile of who you're meeting and finds overlap with your background
-3. **RAG Retrieval Agent** — queries your indexed resume and past briefings for relevant context
-4. **Synthesis Agent** — generates a personalized briefing with talking points specific to your background
+1. **Company Intelligence Agent** — searches the web (Tavily) for recent news, funding and engineering context, and summarizes it with sources
+2. **Interviewer Research Agent** — builds a profile of who you're meeting, drops results that don't mention them, and warns when the match looks like the wrong person
+3. **RAG Retrieval Agent** — retrieves your resume chunks and prior briefings for the same company from pgvector
+4. **Synthesis Agent** — generates role insights and talking points specific to your background; every item must cite a source URL or a resume section, and code drops anything uncited
 
-The output is a 4-section briefing: company intelligence, interviewer profile, your talking points, and questions to ask.
+The output is a 4-section briefing: company overview, interviewer profile, role insights, and talking points. A Google Calendar connection can detect interview events and propose a briefing for you to confirm.
 
 **Optional job description (built).** Paste a job posting on the new-briefing form and the role requirements come from that text instead of being inferred from company research. Each requirement is tagged `[JD]` and the viewer marks it with a "Job description" chip and a "From job description" label on the Key requirements list. The pasted text is treated as untrusted data, is limited to 12,000 characters, is used for that one briefing only (it is not stored, logged or embedded), and is never taken from calendar events. Spec: [specs/job-description-input.md](specs/job-description-input.md).
 
 
 ## Tech Stack
 
-**Frontend:** Next.js, TypeScript, Tailwind CSS, Supabase Auth
+**Frontend:** Next.js (app router), TypeScript, Tailwind CSS
 
 **Backend:** FastAPI, Python 3.12, LangGraph, LangChain, Claude Sonnet
 
@@ -26,15 +28,15 @@ The output is a 4-section briefing: company intelligence, interviewer profile, y
 
 **Vector Store:** pgvector (Supabase)
 
-**Observability:** LangSmith 
+**Observability:** LangSmith
 
-**Evals:** RAGAS (offline harness built; see [Evaluation](#evaluation))
+**Evals:** RAGAS harness with committed baselines (see [Evaluation](#evaluation))
 
-**Integrations:** Google OAuth and Google Calendar interview detection (built, via the Calendar API directly rather than MCP); Gmail and Google Drive (planned)
+**Auth and integrations:** Google OAuth with JWT sessions; Google Calendar interview detection through the Calendar API directly (see ADR 7)
 
-**Infrastructure:** GitHub Actions CI (built); production deployment files for AWS EC2 (Docker Compose + Caddy) and Vercel (built, not yet live; see [Deployment](#deployment))
+**Infrastructure:** GitHub Actions CI; AWS EC2 (Docker Compose + Caddy) for the backend and Vercel for the frontend (see [Deployment](#deployment))
 
-## Target Architecture
+## Architecture
 
 ```
 Next.js Frontend (Vercel)
@@ -49,9 +51,7 @@ LangGraph DAG
     ↓
     └── Synthesis Agent (Claude Sonnet)
     ↓
-Gmail MCP + Google Drive MCP (planned) + Google Calendar (built, direct API)
-Supabase PostgreSQL
-LangSmith Tracing
+Google Calendar (direct API) · Supabase PostgreSQL · LangSmith Tracing
 ```
 
 ## Getting Started
@@ -60,7 +60,7 @@ LangSmith Tracing
 
 - Python 3.12+
 - Node.js 18+
-- Accounts: Anthropic, OpenAI, Supabase, LangSmith, Tavily
+- Accounts: Anthropic, OpenAI, Supabase, LangSmith, Tavily, Google Cloud (OAuth client)
 
 ### Backend Setup
 
@@ -80,7 +80,7 @@ uvicorn main:app --reload
 cd frontend
 npm install
 cp .env.local.example .env.local
-# fill in your Supabase keys
+# point NEXT_PUBLIC_API_URL at the backend
 npm run dev
 ```
 
@@ -98,20 +98,20 @@ LANGSMITH_PROJECT=prepagent
 TAVILY_API_KEY=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+JWT_SECRET=
+TOKEN_ENCRYPTION_KEY=
 FRONTEND_URL=http://localhost:3000
 ```
 
 **frontend/.env.local**
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 ## Deployment
 
-Live: https://<LIVE_URL_PLACEHOLDER> (frontend on Vercel) · API: https://api.<DOMAIN_PLACEHOLDER>/health
+Live: https://useprepagent.app (frontend on Vercel) · API: https://api.useprepagent.app/health
 
 - **Backend:** one EC2 instance running Docker Compose (FastAPI under uvicorn with a **single worker**, Caddy for HTTPS). One worker is required: the OAuth PKCE verifier store and the rate limiter are in process memory, so with more workers about half of sign-ins would fail.
 - **Frontend:** Vercel, root directory `frontend`, `NEXT_PUBLIC_API_URL` set for Production (a Vercel production build fails without it).
@@ -119,9 +119,9 @@ Live: https://<LIVE_URL_PLACEHOLDER> (frontend on Vercel) · API: https://api.<D
 - **Access and cost controls:** Google OAuth runs in Testing mode (invite list). The API enforces per-user and global daily briefing caps (defaults 3 and 20), per-IP rate limits on the sign-in endpoints, and kill switches (`SIGNUPS_ENABLED`, `ALLOWED_EMAILS`, `BRIEFINGS_ENABLED`, `CALENDAR_ENABLED`). With `APP_ENV=production` the API refuses to start on missing or weak secrets.
 - Design, smoke checklist and rollback: [specs/deployment.md](specs/deployment.md). Operator steps: [deploy/RUNBOOK.md](deploy/RUNBOOK.md).
 
-## Agent Architecture (design)
+## Agent Architecture
 
-PrepAgent will use a LangGraph DAG with fixed edges. Company research and interviewer research run in parallel (they're independent), then RAG retrieval pulls relevant resume and briefing context, then synthesis generates the final briefing. Retry logic for insufficient web results lives inside each agent's tool-calling loop rather than in a separate routing layer.
+PrepAgent uses a LangGraph DAG with fixed edges. Company research and interviewer research run in parallel (they're independent), then RAG retrieval pulls relevant resume and briefing context, then synthesis generates the final briefing. Retry logic for insufficient web results lives inside each agent's tool-calling loop rather than in a separate routing layer.
 
 
 ## Key Design Decisions
@@ -132,12 +132,14 @@ Full reasoning is in [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) and 
 - **pgvector over Pinecone/Qdrant.** The corpus is about 15 resume chunks plus a small set of briefing chunks per user, and Supabase is already in the stack.
 - **No reranker.** Retrieval is a SQL filter scoped by `user_id` and company, because the candidate set is already most of the corpus.
 - **Cross-contamination prevention.** Briefing chunks are filtered to the target company so other companies' details don't leak into talking points.
-- **Guardrails for hallucination.** Source attribution in synthesis and low-result warnings .
+- **Guardrails for hallucination.** Source attribution in synthesis, citation validation in code (uncited items are dropped with a warning), and low-result warnings.
 - **Identity from the JWT only**, never the request body.
+- **Untrusted text is fenced.** Calendar event text, search results and pasted job descriptions are treated as untrusted data; the calendar classifier has no tools and code, not the model, chooses the action.
+- **Reliability.** Per-provider timeouts and bounded retries, a 120-second pipeline deadline, and stale-run sweeps so a briefing never hangs on `running`.
 
 ## Engineering Workflow
 
-Spec-first (Given/When/Then acceptance criteria in `specs/`), tests written before implementation, and conventional commits.
+Spec-first (Given/When/Then acceptance criteria in `specs/`), tests written before implementation, an independent review before each commit, and conventional commits. About 690 backend tests plus frontend tests run in GitHub Actions CI (ruff, mypy, pytest, lint, tsc, vitest, build).
 
 ## Evaluation
 

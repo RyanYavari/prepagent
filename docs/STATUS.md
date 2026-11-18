@@ -1,7 +1,7 @@
 # PrepAgent status
 
 ## Last updated
-- Date: 2026-11-16
+- Date: 2026-11-18
 - Main commit: `83c1228`
 
 ## Live
@@ -18,6 +18,7 @@
 - AWS deploy (EC2, Docker Compose, Caddy) via `deploy/RUNBOOK.md`
 - Vercel frontend
 - Domain (useprepagent.app)
+- README rewritten as a finished project: live URLs, present-tense architecture, accurate sections and env vars; GitHub repo website set to https://useprepagent.app
 
 ## Measured numbers
 - Eval (Sonnet baseline): company faithfulness 0.99, factual synthesis 0.72, prescriptive synthesis 0.79
@@ -29,7 +30,6 @@
 2. Measure real cost per briefing, re-derive caps (20/day fits $20/month only if under about $0.033)
 3. Uptime monitor on `/health`, confirm AWS Budget alert and provider spend limits
 4. Delete stale GitHub branches
-5. README live URL placeholders and unverified-app note
 6. Resume wording: Gmail and Drive are not built, reword or build
 7. Later: Gmail/Drive, LangSmith, `--repeat` judge noise, base-schema migration, orphaned pending sweep
 
