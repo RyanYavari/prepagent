@@ -20,6 +20,7 @@
 - Domain (useprepagent.app)
 - Privacy Policy (`/privacy`) and Terms of Service (`/tos`) pages, linked from the sign-in page, for Google OAuth verification
 - PrepAgent logo (`public/logo.png`) on sign-in and legal pages, replaces the default favicon (`app/icon.png`, `app/apple-icon.png`); page title fixed
+- Dark-mode readability: briefing viewer and legal pages use the theme foreground colour; larger briefing headers; html background set
 - README rewritten as a finished project: live URLs, present-tense architecture, accurate sections and env vars; GitHub repo website set to https://useprepagent.app
 
 ## Measured numbers
