@@ -41,6 +41,11 @@ export default function Home() {
         >
           {loading ? "Redirecting..." : "Sign in with Google"}
         </button>
+        <p className="text-xs text-gray-500 mt-6">
+          <a href="/privacy" className="underline">Privacy Policy</a>
+          {" · "}
+          <a href="/tos" className="underline">Terms of Service</a>
+        </p>
       </div>
     </main>
   );

@@ -1,7 +1,7 @@
 # PrepAgent status
 
 ## Last updated
-- Date: 2026-11-18
+- Date: 2026-11-19
 - Main commit: `83c1228`
 
 ## Live
@@ -18,6 +18,7 @@
 - AWS deploy (EC2, Docker Compose, Caddy) via `deploy/RUNBOOK.md`
 - Vercel frontend
 - Domain (useprepagent.app)
+- Privacy Policy (`/privacy`) and Terms of Service (`/tos`) pages, linked from the sign-in page, for Google OAuth verification
 - README rewritten as a finished project: live URLs, present-tense architecture, accurate sections and env vars; GitHub repo website set to https://useprepagent.app
 
 ## Measured numbers
@@ -26,10 +27,11 @@
 - Cost per briefing: not yet measured
 
 ## TODO (priority order)
-1. Production smoke test: real briefings with and without a JD, `free -m` and `dmesg` OOM check, log-hygiene marker test
-2. Measure real cost per briefing, re-derive caps (20/day fits $20/month only if under about $0.033)
-3. Uptime monitor on `/health`, confirm AWS Budget alert and provider spend limits
-4. Delete stale GitHub branches
+1. Google OAuth verification: deploy /privacy and /tos, set consent-screen home/privacy/terms URLs to useprepagent.app, add calendar scope justification and demo video; honor the email-based deletion promise in the policy
+2. Production smoke test: real briefings with and without a JD, `free -m` and `dmesg` OOM check, log-hygiene marker test
+3. Measure real cost per briefing, re-derive caps (20/day fits $20/month only if under about $0.033)
+4. Uptime monitor on `/health`, confirm AWS Budget alert and provider spend limits
+5. Delete stale GitHub branches
 6. Resume wording: Gmail and Drive are not built, reword or build
 7. Later: Gmail/Drive, LangSmith, `--repeat` judge noise, base-schema migration, orphaned pending sweep
 
