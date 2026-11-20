@@ -12,20 +12,20 @@ export function LegalPage({
   children: React.ReactNode;
 }) {
   return (
-    <main className="max-w-3xl mx-auto px-6 py-12 text-gray-800">
+    <main className="max-w-3xl mx-auto px-6 py-12 text-foreground">
       <Link
         href="/"
-        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:underline"
+        className="inline-flex items-center gap-2 text-sm text-foreground/70 hover:underline"
       >
         <Image src="/logo.png" alt="" width={28} height={28} />
         PrepAgent
       </Link>
       <h1 className="text-3xl font-bold mt-4 mb-1">{title}</h1>
-      <p className="text-sm text-gray-500 mb-8">Last updated {LEGAL_UPDATED}</p>
+      <p className="text-sm text-foreground/70 mb-8">Last updated {LEGAL_UPDATED}</p>
       <div className="space-y-4 leading-relaxed [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:mt-8 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-1 [&_a]:underline">
         {children}
       </div>
-      <p className="text-sm text-gray-500 mt-12">
+      <p className="text-sm text-foreground/70 mt-12">
         <Link href="/privacy">Privacy Policy</Link> &middot;{" "}
         <Link href="/tos">Terms of Service</Link>
       </p>
