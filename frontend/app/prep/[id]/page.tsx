@@ -111,13 +111,13 @@ export default function BriefingViewer() {
   if (!ready) {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-600">Loading...</p>
+        <p className="text-foreground">Loading...</p>
       </main>
     );
   }
 
   const back = (
-    <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-800">
+    <Link href="/dashboard" className="text-sm text-gray-500 hover:text-foreground">
       ← Back to dashboard
     </Link>
   );
@@ -128,7 +128,7 @@ export default function BriefingViewer() {
         <div className="max-w-3xl mx-auto">
           {back}
           <div className="border rounded-lg p-8 text-center mt-6">
-            <p className="text-gray-700">Briefing not found.</p>
+            <p className="text-foreground">Briefing not found.</p>
           </div>
         </div>
       </main>
@@ -166,9 +166,9 @@ export default function BriefingViewer() {
 
         <header className="mt-4 mb-6">
           <h1 className="text-3xl font-bold">{briefing.company}</h1>
-          {briefing.role && <p className="text-gray-700">{briefing.role}</p>}
+          {briefing.role && <p className="text-foreground">{briefing.role}</p>}
           {briefing.interviewer && (
-            <p className="text-gray-600 text-sm">with {briefing.interviewer}</p>
+            <p className="text-foreground/80 text-sm">with {briefing.interviewer}</p>
           )}
         </header>
 
@@ -188,7 +188,7 @@ export default function BriefingViewer() {
                 ? "Queued, starting soon..."
                 : "Researching and writing your briefing..."}
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-foreground/70">
               This usually takes under 90 seconds. This page updates
               automatically.
             </p>
@@ -230,7 +230,7 @@ export default function BriefingViewer() {
             />
           ) : (
             <div className="border rounded-lg p-8 text-center">
-              <p className="text-gray-600">No content was generated.</p>
+              <p className="text-foreground">No content was generated.</p>
             </div>
           ))}
       </div>

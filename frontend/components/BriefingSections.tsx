@@ -22,7 +22,7 @@ function List({
   if (items.length === 0) return null;
   return (
     <div className="mb-4">
-      <h4 className="text-sm font-semibold text-gray-700 mb-1">
+      <h4 className="text-base font-semibold text-foreground mb-1">
         {title}
         {jobDescriptionNote && (
           <span className="ml-2 align-middle px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-normal">
@@ -30,7 +30,7 @@ function List({
           </span>
         )}
       </h4>
-      <ul className="list-disc pl-5 space-y-1 text-gray-800">
+      <ul className="list-disc pl-5 space-y-1 text-foreground">
         {items.map((item, i) => (
           <li key={i}>
             <CitedText text={item} flagUnsourced={flagUnsourced} />
@@ -46,9 +46,9 @@ function Text({ title, text }: { title?: string; text: string }) {
   return (
     <div className="mb-4">
       {title && (
-        <h4 className="text-sm font-semibold text-gray-700 mb-1">{title}</h4>
+        <h4 className="text-base font-semibold text-foreground mb-1">{title}</h4>
       )}
-      <p className="text-gray-800 whitespace-pre-line">
+      <p className="text-foreground whitespace-pre-line">
         <CitedText text={text} />
       </p>
     </div>
@@ -59,7 +59,7 @@ function Sources({ urls }: { urls: string[] }) {
   if (urls.length === 0) return null;
   return (
     <div className="mb-2">
-      <h4 className="text-sm font-semibold text-gray-700 mb-1">Sources</h4>
+      <h4 className="text-base font-semibold text-foreground mb-1">Sources</h4>
       <div className="flex flex-wrap gap-1">
         {urls.map((u) => (
           <SourceLink key={u} url={u} />
@@ -82,8 +82,8 @@ function Section({
 }) {
   return (
     <section className="border rounded-lg p-5 mb-5">
-      <h3 className="text-lg font-semibold mb-3">{title}</h3>
-      {empty ? <p className="text-gray-500 text-sm">{emptyText}</p> : children}
+      <h3 className="text-2xl font-semibold mb-4">{title}</h3>
+      {empty ? <p className="text-foreground/70 text-sm">{emptyText}</p> : children}
     </section>
   );
 }
