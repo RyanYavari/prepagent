@@ -22,6 +22,7 @@
 - PrepAgent logo (`public/logo.png`) on sign-in and legal pages, replaces the default favicon (`app/icon.png`, `app/apple-icon.png`); page title fixed
 - Dark-mode readability: briefing viewer and legal pages use the theme foreground colour; larger briefing headers; html background set
 - GitHub repo link in the sign-in and legal page footers
+- Launch page enlarged; tagline now "AI-powered interview research briefings in under 90 seconds."
 - README rewritten as a finished project: live URLs, present-tense architecture, accurate sections and env vars; GitHub repo website set to https://useprepagent.app
 
 ## Measured numbers

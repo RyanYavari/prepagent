@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "PrepAgent",
-  description: "AI-powered interview research. 90 seconds. Every time.",
+  description: "AI-powered interview research briefings in under 90 seconds.",
 };
 
 export default function RootLayout({

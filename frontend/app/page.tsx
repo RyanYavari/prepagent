@@ -33,24 +33,24 @@ export default function Home() {
         <Image
           src="/logo.png"
           alt="PrepAgent logo"
-          width={72}
-          height={72}
+          width={120}
+          height={120}
           priority
-          className="mx-auto mb-4"
+          className="mx-auto mb-6"
         />
-        <h1 className="text-4xl font-bold mb-4">PrepAgent</h1>
-        <p className="text-gray-600 mb-8">
-          AI-powered interview research. 90 seconds. Every time.
+        <h1 className="text-6xl font-bold mb-5">PrepAgent</h1>
+        <p className="text-foreground/80 text-2xl mb-10">
+          AI-powered interview research briefings in under 90 seconds.
         </p>
-        {error && <p className="text-red-500 mb-4 text-sm">{error}</p>}
+        {error && <p className="text-red-500 mb-4 text-base">{error}</p>}
         <button
           onClick={handleSignIn}
           disabled={loading}
-          className="bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-black text-white text-xl px-10 py-5 rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Redirecting..." : "Sign in with Google"}
         </button>
-        <p className="text-xs text-gray-500 mt-6">
+        <p className="text-base text-foreground/70 mt-8">
           <a href="/privacy" className="underline">Privacy Policy</a>
           {" · "}
           <a href="/tos" className="underline">Terms of Service</a>
