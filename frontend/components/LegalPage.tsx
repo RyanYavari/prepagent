@@ -27,7 +27,14 @@ export function LegalPage({
       </div>
       <p className="text-sm text-foreground/70 mt-12">
         <Link href="/privacy">Privacy Policy</Link> &middot;{" "}
-        <Link href="/tos">Terms of Service</Link>
+        <Link href="/tos">Terms of Service</Link> &middot;{" "}
+        <a
+          href="https://github.com/RyanYavari/prepagent"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          GitHub
+        </a>
       </p>
     </main>
   );

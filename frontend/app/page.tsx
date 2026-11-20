@@ -54,6 +54,15 @@ export default function Home() {
           <a href="/privacy" className="underline">Privacy Policy</a>
           {" · "}
           <a href="/tos" className="underline">Terms of Service</a>
+          {" · "}
+          <a
+            href="https://github.com/RyanYavari/prepagent"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+          >
+            GitHub
+          </a>
         </p>
       </div>
     </main>
