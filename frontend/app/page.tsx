@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { API_URL } from "@/lib/api";
 
@@ -29,6 +30,14 @@ export default function Home() {
   return (
     <main className="min-h-screen flex items-center justify-center">
       <div className="text-center">
+        <Image
+          src="/logo.png"
+          alt="PrepAgent logo"
+          width={72}
+          height={72}
+          priority
+          className="mx-auto mb-4"
+        />
         <h1 className="text-4xl font-bold mb-4">PrepAgent</h1>
         <p className="text-gray-600 mb-8">
           AI-powered interview research. 90 seconds. Every time.

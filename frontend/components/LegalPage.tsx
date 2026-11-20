@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export const LEGAL_CONTACT = "prepagent.app@gmail.com";
@@ -12,8 +13,12 @@ export function LegalPage({
 }) {
   return (
     <main className="max-w-3xl mx-auto px-6 py-12 text-gray-800">
-      <Link href="/" className="text-sm text-gray-500 hover:underline">
-        &larr; PrepAgent
+      <Link
+        href="/"
+        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:underline"
+      >
+        <Image src="/logo.png" alt="" width={28} height={28} />
+        PrepAgent
       </Link>
       <h1 className="text-3xl font-bold mt-4 mb-1">{title}</h1>
       <p className="text-sm text-gray-500 mb-8">Last updated {LEGAL_UPDATED}</p>
